@@ -10,6 +10,9 @@ import UIKit
 
 // MARK: - SKLocalPhoto
 open class SKLocalPhoto: NSObject, SKPhotoProtocol {
+    public var progress: Double = 1
+    
+    public var progressChanged: ((SKPhotoProtocol) -> Void)?
     
     open var underlyingImage: UIImage!
     open var photoURL: String!
