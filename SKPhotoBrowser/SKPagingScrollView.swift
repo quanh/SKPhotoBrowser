@@ -67,6 +67,13 @@ class SKPagingScrollView: UIScrollView {
         }
     }
     
+    func updatePhoto(_ index: Int, with photo: SKPhotoProtocol){
+        guard let _ = browser, let page = pageDisplayedAtIndex(index) else {
+            return
+        }
+        page.photo = photo
+    }
+    
     func deleteImage() {
         // index equals 0 because when we slide between photos delete button is hidden and user cannot to touch on delete button. And visible pages number equals 0
         if numberOfPhotos > 0 {

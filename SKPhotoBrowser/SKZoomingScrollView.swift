@@ -13,6 +13,11 @@ open class SKZoomingScrollView: UIScrollView {
     var photo: SKPhotoProtocol! {
         didSet {
             imageView.image = nil
+            photo.progressChanged = {[weak self] p in
+                DispatchQueue.main.async {
+                    self?.indicatorView.progress = p.progress
+                }
+            }
             if photo != nil && photo.underlyingImage != nil {
                 displayImage(complete: true)
                 return
@@ -22,12 +27,17 @@ open class SKZoomingScrollView: UIScrollView {
             }
         }
     }
+    public var progress: Double = 0{
+        didSet{
+            indicatorView.progress = progress
+        }
+    }
     
     fileprivate weak var browser: SKPhotoBrowser?
     
     fileprivate(set) var imageView: SKDetectingImageView!
     fileprivate var tapView: SKDetectingView!
-    fileprivate var indicatorView: SKIndicatorView!
+    fileprivate var indicatorView: SKProgressMaskView!
     
     required public init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
@@ -65,7 +75,7 @@ open class SKZoomingScrollView: UIScrollView {
         addSubview(imageView)
         
         // indicator
-        indicatorView = SKIndicatorView(frame: frame)
+        indicatorView = SKProgressMaskView(frame: frame)
         addSubview(indicatorView)
         
         // self
@@ -198,11 +208,11 @@ open class SKZoomingScrollView: UIScrollView {
         
         if !flag {
             if photo.underlyingImage == nil {
-                indicatorView.startAnimating()
+                indicatorView.progress = photo.progress
             }
             photo.loadUnderlyingImageAndNotify()
         } else {
-            indicatorView.stopAnimating()
+            indicatorView.progress = photo.progress
         }
         
         if let image = photo.underlyingImage, photo != nil {
@@ -215,7 +225,8 @@ open class SKZoomingScrollView: UIScrollView {
     }
     
     open func displayImageFailure() {
-        indicatorView.stopAnimating()
+        photo.progress = 1
+        indicatorView.progress = 1
     }
     
     // MARK: - handle tap

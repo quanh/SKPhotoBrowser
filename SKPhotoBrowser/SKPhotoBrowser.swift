@@ -186,6 +186,11 @@ open class SKPhotoBrowser: UIViewController {
         pagingScrollView.loadAdjacentPhotosIfNecessary(photo, currentPageIndex: currentPageIndex)
     }
     
+    func updatePhoto(_ index: Int, with photo: SKPhotoProtocol){
+        photos.replaceSubrange(index...index, with: [photo])
+        pagingScrollView.updatePhoto(index, with: photo)
+    }
+    
     // MARK: - initialize / setup
     open func reloadData() {
         performLayout()

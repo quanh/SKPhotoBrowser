@@ -16,6 +16,10 @@ import SKPhotoBrowserObjC
     var underlyingImage: UIImage! { get }
     var caption: String? { get }
     var contentMode: UIView.ContentMode { get set }
+    
+    var progress: Double { get set }
+    var progressChanged: ((_ photo: SKPhotoProtocol) -> Void)?{ get set }
+    
     func loadUnderlyingImageAndNotify()
     func checkCache()
 }
@@ -26,8 +30,10 @@ open class SKPhoto: NSObject, SKPhotoProtocol {
     open var underlyingImage: UIImage!
     open var caption: String?
     open var contentMode: UIView.ContentMode = .scaleAspectFill
+    open var progress: Double = 1
     open var shouldCachePhotoURLImage: Bool = false
     open var photoURL: String!
+    open var progressChanged: ((SKPhotoProtocol) -> Void)?
 
     override init() {
         super.init()
@@ -92,10 +98,12 @@ open class SKPhoto: NSObject, SKPhotoProtocol {
                 }
             }
         }
-
+        progress = 0
         // Fetch Image
-        let session = URLSession(configuration: SKPhotoBrowserOptions.sessionConfiguration)
+        let session = URLSession(configuration: SKPhotoBrowserOptions.sessionConfiguration, delegate: self, delegateQueue: OperationQueue())
             var task: URLSessionTask?
+        task = session.downloadTask(with: URL)
+        /*
             task = session.dataTask(with: URL, completionHandler: { [weak self] (data, response, error) in
                 guard let self = self else { return }
                 defer { session.finishTasksAndInvalidate() }
@@ -122,13 +130,48 @@ open class SKPhoto: NSObject, SKPhotoProtocol {
                 }
                 
             })
+         */
             task?.resume()
     }
 
     open func loadUnderlyingImageComplete() {
         NotificationCenter.default.post(name: Notification.Name(rawValue: SKPHOTO_LOADING_DID_END_NOTIFICATION), object: self)
+        progress = 1
+        progressChanged?(self)
     }
     
+}
+
+
+extension SKPhoto: URLSessionDelegate, URLSessionDownloadDelegate {
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64){
+        progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        progressChanged?(self)
+    }
+    
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL){
+        defer { session.finishTasksAndInvalidate() }
+        guard let data = try? Data(contentsOf: location),
+        let image = UIImage.animatedImage(withAnimatedGIFData: data) else{
+            DispatchQueue.main.async {
+                self.loadUnderlyingImageComplete()
+            }
+            return
+        }
+        if self.shouldCachePhotoURLImage {
+            SKCache.sharedCache.setImage(image, forKey: self.photoURL)
+        }
+        DispatchQueue.main.async {
+            self.underlyingImage = image
+            self.loadUnderlyingImageComplete()
+        }
+    }
+    
+    public func urlSession(_ session: URLSession, didBecomeInvalidWithError error: Error?) {
+        DispatchQueue.main.async {
+            self.loadUnderlyingImageComplete()
+        }
+    }
 }
 
 // MARK: - Static Function
