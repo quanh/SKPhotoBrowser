@@ -98,8 +98,8 @@ class SKPagingScrollView: UIScrollView {
                 let pageIndex = page.tag - pageIndexTagOffset
                 page.frame = frameForPageAtIndex(pageIndex)
                 page.setMaxMinZoomScalesForCurrentBounds()
-                if page.captionView != nil {
-                    page.captionView.frame = frameForCaptionView(page.captionView, index: pageIndex)
+                if let captionView = page.captionView{
+                    page.captionView?.frame = frameForCaptionView(captionView, index: pageIndex)
                 }
             }
         }
@@ -205,9 +205,8 @@ class SKPagingScrollView: UIScrollView {
     
     func getCaptionViews() -> Set<SKCaptionView> {
         var captionViews = Set<SKCaptionView>()
-        visiblePages
-            .filter { $0.captionView != nil }
-            .forEach { captionViews.insert($0.captionView) }
+        visiblePages.compactMap({ $0.captionView })
+            .forEach { captionViews.insert($0) }
         return captionViews
     }
     

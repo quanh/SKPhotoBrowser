@@ -9,20 +9,20 @@
 import UIKit
 
 open class SKZoomingScrollView: UIScrollView {
-    var captionView: SKCaptionView!
-    var photo: SKPhotoProtocol! {
+    var captionView: SKCaptionView?
+    var photo: SKPhotoProtocol? {
         didSet {
             imageView.image = nil
-            photo.progressChanged = {[weak self] p in
+            photo?.progressChanged = {[weak self] p in
                 DispatchQueue.main.async {
                     self?.indicatorView.progress = p.progress
                 }
             }
-            if photo != nil && photo.underlyingImage != nil {
+            if let _ = photo?.underlyingImage {
                 displayImage(complete: true)
                 return
             }
-            if photo != nil {
+            if let _ = photo {
                 displayImage(complete: false)
             }
         }
@@ -174,7 +174,7 @@ open class SKZoomingScrollView: UIScrollView {
     open func prepareForReuse() {
         photo = nil
         if captionView != nil {
-            captionView.removeFromSuperview()
+            captionView?.removeFromSuperview()
             captionView = nil
         }
     }
@@ -182,7 +182,7 @@ open class SKZoomingScrollView: UIScrollView {
     open func displayImage(_ image: UIImage) {
         // image
         imageView.image = image
-        imageView.contentMode = photo.contentMode
+        imageView.contentMode = photo?.contentMode ?? .scaleAspectFill
         
         var imageViewFrame: CGRect = .zero
         imageViewFrame.origin = .zero
@@ -207,15 +207,15 @@ open class SKZoomingScrollView: UIScrollView {
         zoomScale = 1
         
         if !flag {
-            if photo.underlyingImage == nil {
-                indicatorView.progress = photo.progress
+            if photo?.underlyingImage == nil {
+                indicatorView.progress = photo?.progress ?? 0
             }
-            photo.loadUnderlyingImageAndNotify()
+            photo?.loadUnderlyingImageAndNotify()
         } else {
-            indicatorView.progress = photo.progress
+            indicatorView.progress = photo?.progress ?? 0
         }
         
-        if let image = photo.underlyingImage, photo != nil {
+        if let image = photo?.underlyingImage {
             displayImage(image)
 		    } else {
 			    // change contentSize will reset contentOffset, so only set the contentsize zero when the image is nil
@@ -225,7 +225,7 @@ open class SKZoomingScrollView: UIScrollView {
     }
     
     open func displayImageFailure() {
-        photo.progress = 1
+        photo?.progress = 1
         indicatorView.progress = 1
     }
     
