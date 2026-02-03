@@ -405,11 +405,16 @@ internal extension SKPhotoBrowser {
                 return 15
             }
         }()
-        return view.bounds.divided(atDistance: 44, from: .maxYEdge).slice.offsetBy(dx: 0, dy: -offset)
-    }
-    
-    func frameForToolbarHideAtOrientation() -> CGRect {
-        return view.bounds.divided(atDistance: 44, from: .maxYEdge).slice.offsetBy(dx: 0, dy: 44)
+        
+        let height: CGFloat = {
+            if #available(iOS 26.0, *) {
+                return 48
+            } else {
+                return 44
+            }
+        }()
+        
+        return view.bounds.divided(atDistance: height, from: .maxYEdge).slice.offsetBy(dx: 0, dy: -offset)
     }
     
     func frameForPaginationAtOrientation() -> CGRect {
@@ -558,6 +563,10 @@ private extension SKPhotoBrowser {
     func configurePagingScrollView() {
         pagingScrollView.delegate = self
         view.addSubview(pagingScrollView)
+        
+        if SKPhotoBrowserOptions.protectScreenshot {
+            paginationView.protectScreenshot()
+        }
     }
 
     func configureGestureControl() {
