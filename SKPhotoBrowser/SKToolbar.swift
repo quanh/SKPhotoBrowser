@@ -39,9 +39,7 @@ class SKToolbar: UIToolbar {
         }
         return nil
     }
-}
-
-private extension SKToolbar {
+    
     func setupApperance() {
         backgroundColor = .clear
         clipsToBounds = true
@@ -78,4 +76,3 @@ private extension SKToolbar {
     func setupActionButton() {
     }
 }
-

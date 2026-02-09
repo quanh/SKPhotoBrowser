@@ -10,6 +10,7 @@
 		26C97AD51D0EB6870039F6CB /* SKCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26C97AD41D0EB6870039F6CB /* SKCache.swift */; };
 		26C97AD71D0EB6A00039F6CB /* SKCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26C97AD61D0EB6A00039F6CB /* SKCacheTests.swift */; };
 		26C97AD91D0EB8BB0039F6CB /* SKCacheable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26C97AD81D0EB8BB0039F6CB /* SKCacheable.swift */; };
+		660F205C2F39E6BC000A0313 /* SKDownloadToolBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 660F205B2F39E6BC000A0313 /* SKDownloadToolBar.swift */; };
 		66646BEE2990FFE80040C988 /* SKProgressMaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66646BED2990FFE80040C988 /* SKProgressMaskView.swift */; };
 		7643F4B41FE8CE7A00475F6E /* SKActionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7643F4B31FE8CE7A00475F6E /* SKActionView.swift */; };
 		7643F4B61FE9F42F00475F6E /* SKPaginationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7643F4B51FE9F42F00475F6E /* SKPaginationView.swift */; };
@@ -55,6 +56,7 @@
 		26C97AD41D0EB6870039F6CB /* SKCache.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SKCache.swift; sourceTree = "<group>"; };
 		26C97AD61D0EB6A00039F6CB /* SKCacheTests.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SKCacheTests.swift; sourceTree = "<group>"; };
 		26C97AD81D0EB8BB0039F6CB /* SKCacheable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SKCacheable.swift; sourceTree = "<group>"; };
+		660F205B2F39E6BC000A0313 /* SKDownloadToolBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SKDownloadToolBar.swift; sourceTree = "<group>"; };
 		66646BED2990FFE80040C988 /* SKProgressMaskView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SKProgressMaskView.swift; sourceTree = "<group>"; };
 		7643F4B31FE8CE7A00475F6E /* SKActionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SKActionView.swift; sourceTree = "<group>"; };
 		7643F4B51FE9F42F00475F6E /* SKPaginationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SKPaginationView.swift; sourceTree = "<group>"; };
@@ -148,6 +150,7 @@
 				8909B5331BC791280060A053 /* SKPhotoBrowser.h */,
 				8917B1AF1D5A13DE000CE1C4 /* SKPhotoBrowserDelegate.swift */,
 				7643F4B81FEA4FCF00475F6E /* SKToolbar.swift */,
+				660F205B2F39E6BC000A0313 /* SKDownloadToolBar.swift */,
 				8909B5421BC791510060A053 /* SKZoomingScrollView.swift */,
 				66646BED2990FFE80040C988 /* SKProgressMaskView.swift */,
 				9521CC5F232F677900446D11 /* extensions */,
@@ -325,6 +328,7 @@
 				26C97AD91D0EB8BB0039F6CB /* SKCacheable.swift in Sources */,
 				7643F4B91FEA4FCF00475F6E /* SKToolbar.swift in Sources */,
 				9521CC65232F677A00446D11 /* UIView+Radius.swift in Sources */,
+				660F205C2F39E6BC000A0313 /* SKDownloadToolBar.swift in Sources */,
 				89C24A841D657AFE005F09A9 /* SKPagingScrollView.swift in Sources */,
 				8909B5441BC791510060A053 /* SKDetectingImageView.swift in Sources */,
 				8909B54A1BC791510060A053 /* SKZoomingScrollView.swift in Sources */,
