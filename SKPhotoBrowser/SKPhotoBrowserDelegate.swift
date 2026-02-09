@@ -90,6 +90,6 @@ import UIKit
     /*
      download photo
      */
-    @objc optional func downloadForPhoto(_ browser: SKPhotoBrowser, index: Int)
+    @objc optional func downloadForPhoto(_ browser: SKPhotoBrowser, index: Int, photo: any SKPhotoProtocol)
 }
 

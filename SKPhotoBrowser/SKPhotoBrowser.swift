@@ -500,7 +500,11 @@ internal extension SKPhotoBrowser {
     }
     
     @objc func downloadButtonOnClick(){
-        delegate?.downloadForPhoto?(self, index: currentPageIndex)
+        guard photos.count > 0 else {
+            return
+        }
+        
+        delegate?.downloadForPhoto?(self, index: currentPageIndex, photo: photos[currentPageIndex])
     }
    
     @objc func actionButtonPressed(ignoreAndShare: Bool) {
