@@ -10,6 +10,11 @@ import UIKit
 
 public let SKPHOTO_LOADING_DID_END_NOTIFICATION = "photoLoadingDidEndNotification"
 
+public enum SKPhotoBrowserToolBarType{
+    case share
+    case download
+}
+
 // MARK: - SKPhotoBrowser
 open class SKPhotoBrowser: UIViewController {
     // open function
@@ -35,6 +40,7 @@ open class SKPhotoBrowser: UIViewController {
     fileprivate var actionView: SKActionView!
     fileprivate(set) var paginationView: SKPaginationView!
     var toolbar: SKToolbar!
+    private var toolbarType: SKPhotoBrowserToolBarType = .share
 
     // actions
     fileprivate var activityViewController: UIActivityViewController!
@@ -72,8 +78,8 @@ open class SKPhotoBrowser: UIViewController {
         setup()
     }
     
-    public convenience init(photos: [SKPhotoProtocol]) {
-        self.init(photos: photos, initialPageIndex: 0)
+    public convenience init(photos: [SKPhotoProtocol], toolbarType: SKPhotoBrowserToolBarType = .share) {
+        self.init(photos: photos, initialPageIndex: 0, toolbarType: toolbarType)
     }
     
     @available(*, deprecated)
@@ -85,12 +91,13 @@ open class SKPhotoBrowser: UIViewController {
         animator.senderViewForAnimation = animatedFromView
     }
     
-    public convenience init(photos: [SKPhotoProtocol], initialPageIndex: Int) {
+    public convenience init(photos: [SKPhotoProtocol], initialPageIndex: Int, toolbarType: SKPhotoBrowserToolBarType = .share) {
         self.init(nibName: nil, bundle: nil)
         self.photos = photos
         //self.photos.forEach { $0.checkCache() }
         self.currentPageIndex = min(initialPageIndex, photos.count - 1)
         self.initPageIndex = self.currentPageIndex
+        self.toolbarType = toolbarType
         animator.senderOriginImage = photos[currentPageIndex].underlyingImage
         animator.senderViewForAnimation = photos[currentPageIndex] as? UIView
     }
@@ -491,6 +498,10 @@ internal extension SKPhotoBrowser {
             }
         }
     }
+    
+    @objc func downloadButtonOnClick(){
+        delegate?.downloadForPhoto?(self, index: currentPageIndex)
+    }
    
     @objc func actionButtonPressed(ignoreAndShare: Bool) {
         delegate?.willShowActionSheet?(currentPageIndex)
@@ -592,7 +603,13 @@ private extension SKPhotoBrowser {
     }
     
     func configureToolbar() {
-        toolbar = SKToolbar(frame: frameForToolbarAtOrientation(), browser: self)
+        switch toolbarType{
+        case .share:
+            toolbar = SKToolbar(frame: frameForToolbarAtOrientation(), browser: self)
+        case .download:
+            toolbar = SKDownloadToolBar(frame: frameForToolbarAtOrientation(), browser: self)
+        }
+        
         view.addSubview(toolbar)
     }
 
