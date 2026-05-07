@@ -6,6 +6,8 @@
 //  Copyright © 2015 suzuki_keishi. All rights reserved.
 //
 
+import AVKit
+import PhotosUI
 import UIKit
 
 open class SKZoomingScrollView: UIScrollView {
@@ -15,10 +17,20 @@ open class SKZoomingScrollView: UIScrollView {
             imageView.image = nil
             photo?.progressChanged = {[weak self] p in
                 DispatchQueue.main.async {
-                    self?.indicatorView.progress = p.progress
+                    guard let self = self, self.photo === p else {
+                        return
+                    }
+                    self.indicatorView.progress = p.progress
+                    self.updatePlayButton()
+                    if self.playerLayer == nil,
+                       self.livePhotoView == nil,
+                       let image = p.underlyingImage {
+                        self.displayImage(image)
+                    }
                 }
             }
-            if let _ = photo?.underlyingImage {
+            if let _ = photo?.underlyingImage,
+               (photo as? SKPhotoMediaProtocol)?.mediaType ?? .image == .image {
                 displayImage(complete: true)
                 return
             }
@@ -38,6 +50,13 @@ open class SKZoomingScrollView: UIScrollView {
     fileprivate(set) var imageView: SKDetectingImageView!
     fileprivate var tapView: SKDetectingView!
     fileprivate var indicatorView: SKProgressMaskView!
+    fileprivate var player: AVPlayer?
+    fileprivate var playerLayer: AVPlayerLayer?
+    fileprivate var livePhotoView: UIView?
+    fileprivate var playerEndObserver: NSObjectProtocol?
+    fileprivate var playButton: UIButton!
+    fileprivate var livePhotoBadgeView: UIImageView!
+    fileprivate var isMediaPlaying = false
     
     required public init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
@@ -72,11 +91,37 @@ open class SKZoomingScrollView: UIScrollView {
         imageView.delegate = self
         imageView.contentMode = .bottom
         imageView.backgroundColor = .clear
+        imageView.clipsToBounds = true
         addSubview(imageView)
         
         // indicator
         indicatorView = SKProgressMaskView(frame: frame)
         addSubview(indicatorView)
+
+        // play
+        playButton = UIButton(type: .custom)
+        playButton.backgroundColor = UIColor(white: 0, alpha: 0.55)
+        playButton.layer.cornerRadius = 28
+        playButton.layer.masksToBounds = true
+        playButton.tintColor = .white
+        if #available(iOS 13.0, *) {
+            playButton.setImage(UIImage(systemName: "play.circle"), for: .normal)
+        }
+        playButton.isHidden = true
+        playButton.addTarget(self, action: #selector(togglePlayback), for: .touchUpInside)
+        addSubview(playButton)
+
+        livePhotoBadgeView = UIImageView()
+        livePhotoBadgeView.tintColor = .white
+        livePhotoBadgeView.backgroundColor = UIColor(white: 0, alpha: 0.45)
+        livePhotoBadgeView.layer.cornerRadius = 12
+        livePhotoBadgeView.layer.masksToBounds = true
+        livePhotoBadgeView.contentMode = .center
+        if #available(iOS 13.0, *) {
+            livePhotoBadgeView.image = UIImage(systemName: "livephoto")
+        }
+        livePhotoBadgeView.isHidden = true
+        addSubview(livePhotoBadgeView)
         
         // self
         backgroundColor = .clear
@@ -91,29 +136,47 @@ open class SKZoomingScrollView: UIScrollView {
     open override func layoutSubviews() {
         tapView.frame = bounds
         indicatorView.frame = bounds
+        playButton.frame = CGRect(
+            x: safeAreaAdjustedBounds.midX - 28,
+            y: safeAreaAdjustedBounds.midY - 28,
+            width: 56,
+            height: 56)
+        livePhotoBadgeView.frame = CGRect(
+            x: imageView.frame.minX + 8,
+            y: imageView.frame.minY + 8,
+            width: 32,
+            height: 24)
         
         super.layoutSubviews()
         
-        let boundsSize = bounds.size
+        let visibleBounds = safeAreaAdjustedBounds
+        let boundsSize = visibleBounds.size
         var frameToCenter = imageView.frame
         
         // horizon
         if frameToCenter.size.width < boundsSize.width {
-            frameToCenter.origin.x = floor((boundsSize.width - frameToCenter.size.width) / 2)
+            frameToCenter.origin.x = visibleBounds.minX + floor((boundsSize.width - frameToCenter.size.width) / 2)
         } else {
-            frameToCenter.origin.x = 0
+            frameToCenter.origin.x = visibleBounds.minX
         }
         // vertical
         if frameToCenter.size.height < boundsSize.height {
-            frameToCenter.origin.y = floor((boundsSize.height - frameToCenter.size.height) / 2)
+            frameToCenter.origin.y = visibleBounds.minY + floor((boundsSize.height - frameToCenter.size.height) / 2)
         } else {
-            frameToCenter.origin.y = 0
+            frameToCenter.origin.y = visibleBounds.minY
         }
         
         // Center
         if !imageView.frame.equalTo(frameToCenter) {
             imageView.frame = frameToCenter
         }
+        playerLayer?.frame = imageView.bounds
+        livePhotoView?.frame = imageView.bounds
+        livePhotoBadgeView.frame = CGRect(
+            x: imageView.frame.minX + 8,
+            y: imageView.frame.minY + 8,
+            width: 32,
+            height: 24)
     }
     
     open func setMaxMinZoomScalesForCurrentBounds() {
@@ -125,7 +188,7 @@ open class SKZoomingScrollView: UIScrollView {
             return
         }
         
-        let boundsSize = bounds.size
+        let boundsSize = safeAreaAdjustedBounds.size
         let imageSize = imageView.frame.size
         
         let xScale = boundsSize.width / imageSize.width
@@ -172,6 +235,10 @@ open class SKZoomingScrollView: UIScrollView {
     }
     
     open func prepareForReuse() {
+        pause()
+        clearMediaViews()
+        updatePlayButton(hidden: true)
+        updateLivePhotoBadge(hidden: true)
         photo = nil
         if captionView != nil {
             captionView?.removeFromSuperview()
@@ -180,16 +247,20 @@ open class SKZoomingScrollView: UIScrollView {
     }
     
     open func displayImage(_ image: UIImage) {
+        clearMediaViews()
         // image
         imageView.image = image
         imageView.contentMode = photo?.contentMode ?? .scaleAspectFill
+        updatePlayButton(hidden: true)
+        updateLivePhotoBadge(hidden: true)
         
         var imageViewFrame: CGRect = .zero
         imageViewFrame.origin = .zero
         // long photo
         if SKPhotoBrowserOptions.longPhotoWidthMatchScreen && image.size.height >= image.size.width {
-            let imageHeight = SKMesurement.screenWidth / image.size.width * image.size.height
-            imageViewFrame.size = CGSize(width: SKMesurement.screenWidth, height: imageHeight)
+            let width = safeAreaAdjustedBounds.width
+            let imageHeight = width / image.size.width * image.size.height
+            imageViewFrame.size = CGSize(width: width, height: imageHeight)
         } else {
             imageViewFrame.size = image.size
         }
@@ -201,32 +272,63 @@ open class SKZoomingScrollView: UIScrollView {
     
     // MARK: - image
     open func displayImage(complete flag: Bool) {
+        clearMediaViews()
         // reset scale
         maximumZoomScale = 1
         minimumZoomScale = 1
         zoomScale = 1
         
         if !flag {
-            if photo?.underlyingImage == nil {
-                indicatorView.progress = photo?.progress ?? 0
-            }
+            indicatorView.progress = photo?.progress ?? 0
             photo?.loadUnderlyingImageAndNotify()
         } else {
             indicatorView.progress = photo?.progress ?? 0
         }
         
-        if let image = photo?.underlyingImage {
-            displayImage(image)
-		    } else {
-			    // change contentSize will reset contentOffset, so only set the contentsize zero when the image is nil
-			    contentSize = CGSize.zero
-		    }
+        if !displayMediaIfPossible() {
+            if let image = photo?.underlyingImage {
+                displayImage(image)
+            } else {
+                // change contentSize will reset contentOffset, so only set the contentsize zero when the image is nil
+                contentSize = CGSize.zero
+            }
+        }
         setNeedsLayout()
     }
     
     open func displayImageFailure() {
         photo?.progress = 1
         indicatorView.progress = 1
+    }
+
+    open func play() {
+        if #available(iOS 9.1, *), let livePhotoView = livePhotoView as? PHLivePhotoView {
+            livePhotoView.startPlayback(with: .full)
+            isMediaPlaying = true
+            updatePlayButton()
+            return
+        }
+        player?.play()
+        isMediaPlaying = true
+        updatePlayButton()
+    }
+
+    open func pause() {
+        if #available(iOS 9.1, *), let livePhotoView = livePhotoView as? PHLivePhotoView {
+            livePhotoView.stopPlayback()
+        }
+        player?.pause()
+        isMediaPlaying = false
+        updatePlayButton()
+    }
+
+    @objc func togglePlayback() {
+        if isMediaPlaying {
+            pause()
+        } else {
+            play()
+        }
+        browser?.hideControlsAfterDelay()
     }
     
     // MARK: - handle tap
@@ -317,7 +419,132 @@ extension SKZoomingScrollView: SKDetectingImageViewDelegate {
     }
 }
 
+@available(iOS 9.1, *)
+extension SKZoomingScrollView: PHLivePhotoViewDelegate {
+    public func livePhotoView(_ livePhotoView: PHLivePhotoView, didEndPlaybackWith playbackStyle: PHLivePhotoViewPlaybackStyle) {
+        isMediaPlaying = false
+        updatePlayButton()
+    }
+}
+
 private extension SKZoomingScrollView {
+    var safeAreaAdjustedBounds: CGRect {
+        guard #available(iOS 11.0, *) else {
+            return bounds
+        }
+        let rect = bounds.inset(by: safeAreaInsets)
+        return CGRect(origin: rect.origin, size: CGSize(width: rect.width, height: rect.height - 24))
+    }
+
+    func displayMediaIfPossible() -> Bool {
+        guard let mediaPhoto = photo as? SKPhotoMediaProtocol else {
+            return false
+        }
+
+        switch mediaPhoto.mediaType {
+        case .image:
+            return false
+        case .video:
+            guard let videoURL = mediaPhoto.videoURL else {
+                return false
+            }
+            configureMediaFrame()
+            imageView.image = photo?.underlyingImage
+            imageView.contentMode = photo?.contentMode ?? .scaleAspectFill
+
+            let player = AVPlayer(url: videoURL)
+            let layer = AVPlayerLayer(player: player)
+            layer.videoGravity = .resizeAspect
+            layer.frame = imageView.bounds
+            imageView.layer.addSublayer(layer)
+
+            self.player = player
+            self.playerLayer = layer
+            updateLivePhotoBadge(hidden: true)
+            playerEndObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player.currentItem,
+                queue: .main) { [weak self] _ in
+                    self?.player?.seek(to: CMTime.zero)
+                    self?.isMediaPlaying = false
+                    self?.updatePlayButton()
+                }
+            isMediaPlaying = false
+            updatePlayButton(hidden: false)
+            return true
+        case .livePhoto:
+            guard #available(iOS 9.1, *), let livePhoto = mediaPhoto.livePhoto else {
+                return false
+            }
+            configureMediaFrame()
+            imageView.image = nil
+
+            let liveView = PHLivePhotoView(frame: imageView.bounds)
+            liveView.livePhoto = livePhoto
+            liveView.contentMode = photo?.contentMode ?? .scaleAspectFill
+            liveView.clipsToBounds = true
+            liveView.delegate = self
+            imageView.addSubview(liveView)
+
+            livePhotoView = liveView
+            isMediaPlaying = false
+            updatePlayButton(hidden: false)
+            updateLivePhotoBadge(hidden: false)
+            return true
+        }
+    }
+
+    func configureMediaFrame() {
+        var size = safeAreaAdjustedBounds.size
+        if let imageSize = photo?.underlyingImage?.size, imageSize != .zero {
+            size = imageSize
+        }
+        if size == .zero {
+            size = CGSize(width: SKMesurement.screenWidth, height: SKMesurement.screenHeight)
+        }
+
+        imageView.frame = CGRect(origin: .zero, size: size)
+        contentSize = size
+        setMaxMinZoomScalesForCurrentBounds()
+    }
+
+    func clearMediaViews() {
+        if let playerEndObserver = playerEndObserver {
+            NotificationCenter.default.removeObserver(playerEndObserver)
+            self.playerEndObserver = nil
+        }
+        playerLayer?.removeFromSuperlayer()
+        playerLayer = nil
+        player?.pause()
+        player = nil
+        isMediaPlaying = false
+        if #available(iOS 9.1, *), let livePhotoView = livePhotoView as? PHLivePhotoView {
+            livePhotoView.stopPlayback()
+        }
+        livePhotoView?.removeFromSuperview()
+        livePhotoView = nil
+        updatePlayButton(hidden: true)
+        updateLivePhotoBadge(hidden: true)
+    }
+
+    func updatePlayButton(hidden: Bool? = nil) {
+        if let hidden = hidden {
+            playButton.isHidden = hidden || (photo?.progress ?? 0) < 1
+        } else {
+            playButton.isHidden = (player == nil && livePhotoView == nil) || (photo?.progress ?? 0) < 1
+        }
+        if #available(iOS 13.0, *) {
+            let imageName = isMediaPlaying ? "pause.circle" : "play.circle"
+            playButton.setImage(UIImage(systemName: imageName), for: .normal)
+        } else {
+            playButton.setTitle(isMediaPlaying ? "Pause" : "Play", for: .normal)
+        }
+    }
+
+    func updateLivePhotoBadge(hidden: Bool) {
+        livePhotoBadgeView.isHidden = hidden
+    }
+
     func getViewFramePercent(_ view: UIView, touch: UITouch) -> CGPoint {
         let oneWidthViewPercent = view.bounds.width / 100
         let viewTouchPoint = touch.location(in: view)

@@ -6,6 +6,7 @@
 //  Copyright © 2016 suzuki_keishi. All rights reserved.
 //
 
+import Foundation
 import UIKit.UIImage
 
 public protocol SKCacheable {}
@@ -14,6 +15,13 @@ public protocol SKImageCacheable: SKCacheable {
     func setImage(_ image: UIImage, forKey key: String)
     func removeImageForKey(_ key: String)
     func removeAllImages()
+}
+
+public protocol SKDataCacheable: SKCacheable {
+    func dataForKey(_ key: String) -> Data?
+    func setData(_ data: Data, forKey key: String)
+    func removeDataForKey(_ key: String)
+    func removeAllData()
 }
 
 public protocol SKRequestResponseCacheable: SKCacheable {

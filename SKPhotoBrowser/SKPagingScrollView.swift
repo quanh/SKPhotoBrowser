@@ -53,14 +53,14 @@ class SKPagingScrollView: UIScrollView {
             // Previous
             if pageIndex > 0 {
                 let previousPhoto = browser.photos[pageIndex - 1]
-                if previousPhoto.underlyingImage == nil {
+                if previousPhoto.needsUnderlyingMediaLoad {
                     previousPhoto.loadUnderlyingImageAndNotify()
                 }
             }
             // Next
             if pageIndex < numberOfPhotos - 1 {
                 let nextPhoto = browser.photos[pageIndex + 1]
-                if nextPhoto.underlyingImage == nil {
+                if nextPhoto.needsUnderlyingMediaLoad {
                     nextPhoto.loadUnderlyingImageAndNotify()
                 }
             }
@@ -221,6 +221,29 @@ class SKPagingScrollView: UIScrollView {
     }
 }
 
+private extension SKPhotoProtocol {
+    var needsUnderlyingMediaLoad: Bool {
+        if underlyingImage != nil {
+            return false
+        }
+        guard let mediaPhoto = self as? SKPhotoMediaProtocol else {
+            return true
+        }
+
+        switch mediaPhoto.mediaType {
+        case .image:
+            return true
+        case .video:
+            return mediaPhoto.videoURL == nil
+        case .livePhoto:
+            if #available(iOS 9.1, *) {
+                return mediaPhoto.livePhoto == nil
+            }
+            return true
+        }
+    }
+}
+
 private extension SKPagingScrollView {
     func frameForPageAtIndex(_ index: Int) -> CGRect {
         var pageFrame = bounds
@@ -261,4 +284,3 @@ private extension SKPagingScrollView {
         return lastIndex
     }
 }
-

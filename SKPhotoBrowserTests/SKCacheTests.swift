@@ -14,6 +14,7 @@ class SKCacheTests: XCTestCase {
     var cache: SKCache!
     let image = UIImage()
     let key = "test_image"
+    let data = Data([0x01, 0x02, 0x03])
 
     override func setUp() {
         super.setUp()
@@ -84,5 +85,53 @@ class SKCacheTests: XCTestCase {
         let anotherCachedImage = self.cache.imageForKey(anotherKey)
         XCTAssertNil(cachedImage)
         XCTAssertNil(anotherCachedImage)
+    }
+
+    func testDefaultCacheDataForKey() {
+        // given
+        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.dataCache
+        cache.setObject(self.data as AnyObject, forKey: self.key as AnyObject)
+
+        // when
+        let cachedData = self.cache.dataForKey(self.key)
+
+        // then
+        XCTAssertEqual(cachedData, self.data)
+    }
+
+    func testDefaultCacheSetDataForKey() {
+        // when
+        self.cache.setData(self.data, forKey: self.key)
+
+        // then
+        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.dataCache
+        let cachedData = cache.object(forKey: self.key as AnyObject) as? Data
+        XCTAssertEqual(cachedData, self.data)
+    }
+
+    func testDefaultCacheRemoveDataForKey() {
+        // given
+        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.dataCache
+        cache.setObject(self.data as AnyObject, forKey: self.key as AnyObject)
+
+        // when
+        self.cache.removeDataForKey(self.key)
+
+        // then
+        XCTAssertNil(self.cache.dataForKey(self.key))
+    }
+
+    func testDefaultCacheRemoveAllData() {
+        // given
+        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.dataCache
+        cache.setObject(self.data as AnyObject, forKey: self.key as AnyObject)
+        cache.setObject(Data([0x04]) as AnyObject, forKey: "another_test_data" as AnyObject)
+
+        // when
+        self.cache.removeAllData()
+
+        // then
+        XCTAssertNil(self.cache.dataForKey(self.key))
+        XCTAssertNil(self.cache.dataForKey("another_test_data"))
     }
 }

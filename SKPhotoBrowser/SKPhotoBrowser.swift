@@ -180,7 +180,7 @@ open class SKPhotoBrowser: UIViewController {
                 return
             }
             
-            if photo.underlyingImage != nil {
+            if photo.underlyingImage != nil || photo.hasLoadedMedia {
                 page.displayImage(complete: true)
                 self.loadAdjacentPhotosIfNecessary(photo)
             } else {
@@ -273,6 +273,26 @@ open class SKPhotoBrowser: UIViewController {
             let popover: UIPopoverPresentationController! = activityViewController.popoverPresentationController
             popover.barButtonItem = toolbar.toolActionButton
             present(activityViewController, animated: true, completion: nil)
+        }
+    }
+}
+
+private extension SKPhotoProtocol {
+    var hasLoadedMedia: Bool {
+        guard let mediaPhoto = self as? SKPhotoMediaProtocol else {
+            return false
+        }
+
+        switch mediaPhoto.mediaType {
+        case .image:
+            return false
+        case .video:
+            return mediaPhoto.videoURL != nil
+        case .livePhoto:
+            if #available(iOS 9.1, *) {
+                return mediaPhoto.livePhoto != nil
+            }
+            return false
         }
     }
 }

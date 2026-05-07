@@ -48,6 +48,38 @@ open class SKCache {
         cache.removeAllImages()
     }
 
+    open func dataForKey(_ key: String) -> Data? {
+        guard let cache = imageCache as? SKDataCacheable else {
+            return nil
+        }
+
+        return cache.dataForKey(key)
+    }
+
+    open func setData(_ data: Data, forKey key: String) {
+        guard let cache = imageCache as? SKDataCacheable else {
+            return
+        }
+
+        cache.setData(data, forKey: key)
+    }
+
+    open func removeDataForKey(_ key: String) {
+        guard let cache = imageCache as? SKDataCacheable else {
+            return
+        }
+
+        cache.removeDataForKey(key)
+    }
+
+    open func removeAllData() {
+        guard let cache = imageCache as? SKDataCacheable else {
+            return
+        }
+
+        cache.removeAllData()
+    }
+
     open func imageForRequest(_ request: URLRequest) -> UIImage? {
         guard let cache = imageCache as? SKRequestResponseCacheable else {
             return nil
@@ -68,11 +100,13 @@ open class SKCache {
     }
 }
 
-class SKDefaultImageCache: SKImageCacheable {
+class SKDefaultImageCache: SKImageCacheable, SKDataCacheable {
     var cache: NSCache<AnyObject, AnyObject>
+    var dataCache: NSCache<AnyObject, AnyObject>
 
     init() {
         cache = NSCache()
+        dataCache = NSCache()
     }
 
     func imageForKey(_ key: String) -> UIImage? {
@@ -89,5 +123,21 @@ class SKDefaultImageCache: SKImageCacheable {
     
     func removeAllImages() {
         cache.removeAllObjects()
+    }
+
+    func dataForKey(_ key: String) -> Data? {
+        return dataCache.object(forKey: key as AnyObject) as? Data
+    }
+
+    func setData(_ data: Data, forKey key: String) {
+        dataCache.setObject(data as AnyObject, forKey: key as AnyObject)
+    }
+
+    func removeDataForKey(_ key: String) {
+        dataCache.removeObject(forKey: key as AnyObject)
+    }
+
+    func removeAllData() {
+        dataCache.removeAllObjects()
     }
 }
