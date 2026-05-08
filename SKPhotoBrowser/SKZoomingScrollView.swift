@@ -57,9 +57,19 @@ open class SKZoomingScrollView: UIScrollView {
     fileprivate var playerLayer: AVPlayerLayer?
     fileprivate var livePhotoView: UIView?
     fileprivate var playerEndObserver: NSObjectProtocol?
-    fileprivate var playButton: UIButton!
-    fileprivate var livePhotoBadgeView: UIImageView!
     fileprivate var isMediaPlaying = false
+
+    var shouldShowMediaPlayButton: Bool {
+        return (player != nil || livePhotoView != nil) && (photo?.progress ?? 0) >= 1
+    }
+
+    var shouldShowLivePhotoBadge: Bool {
+        return livePhotoView != nil
+    }
+
+    var mediaIsPlaying: Bool {
+        return isMediaPlaying
+    }
     
     required public init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
@@ -101,36 +111,14 @@ open class SKZoomingScrollView: UIScrollView {
         indicatorView = SKProgressMaskView(frame: frame)
         addSubview(indicatorView)
 
-        // play
-        playButton = UIButton(type: .custom)
-        playButton.tintColor = .white
-        playButton.imageView?.contentMode = .scaleAspectFill
-        if #available(iOS 17.0, *) {
-            playButton.imageView?.preferredImageDynamicRange = .high
-        } else {
-            // Fallback on earlier versions
-        }
-        if #available(iOS 13.0, *) {
-            playButton.setImage(UIImage(systemName: "play.circle", withConfiguration: UIImage.SymbolConfiguration(pointSize: 48)), for: .normal)
-        }
-        playButton.isHidden = true
-        playButton.addTarget(self, action: #selector(togglePlayback), for: .touchUpInside)
-        addSubview(playButton)
-
-        livePhotoBadgeView = UIImageView()
-        livePhotoBadgeView.tintColor = .white
-        livePhotoBadgeView.contentMode = .center
-        if #available(iOS 13.0, *) {
-            livePhotoBadgeView.image = UIImage(systemName: "livephoto", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24))
-        }
-        livePhotoBadgeView.isHidden = true
-        addSubview(livePhotoBadgeView)
-        
         // self
         backgroundColor = .clear
         delegate = self
         showsHorizontalScrollIndicator = SKPhotoBrowserOptions.displayHorizontalScrollIndicator
         showsVerticalScrollIndicator = SKPhotoBrowserOptions.displayVerticalScrollIndicator
+        if #available(iOS 11.0, *) {
+            contentInsetAdjustmentBehavior = .never
+        }
         autoresizingMask = [.flexibleWidth, .flexibleTopMargin, .flexibleBottomMargin, .flexibleRightMargin, .flexibleLeftMargin]
     }
     
@@ -139,47 +127,32 @@ open class SKZoomingScrollView: UIScrollView {
     open override func layoutSubviews() {
         tapView.frame = bounds
         indicatorView.frame = bounds
-        playButton.frame = CGRect(
-            x: safeAreaAdjustedBounds.midX - 28,
-            y: safeAreaAdjustedBounds.midY - 28,
-            width: 56,
-            height: 56)
-        livePhotoBadgeView.frame = CGRect(
-            x: imageView.frame.minX + 16,
-            y: imageView.frame.minY + 48,
-            width: 24,
-            height: 24)
         
         super.layoutSubviews()
         
-        let visibleBounds = safeAreaAdjustedBounds
-        let boundsSize = visibleBounds.size
+        let boundsSize = bounds.size
         var frameToCenter = imageView.frame
         
         // horizon
         if frameToCenter.size.width < boundsSize.width {
-            frameToCenter.origin.x = visibleBounds.minX + floor((boundsSize.width - frameToCenter.size.width) / 2)
+            frameToCenter.origin.x = floor((boundsSize.width - frameToCenter.size.width) / 2)
         } else {
-            frameToCenter.origin.x = visibleBounds.minX
+            frameToCenter.origin.x = 0
         }
         // vertical
         if frameToCenter.size.height < boundsSize.height {
-            frameToCenter.origin.y = visibleBounds.minY + floor((boundsSize.height - frameToCenter.size.height) / 2)
+            frameToCenter.origin.y = floor((boundsSize.height - frameToCenter.size.height) / 2)
         } else {
-            frameToCenter.origin.y = visibleBounds.minY
+            frameToCenter.origin.y = 0
         }
         
         // Center
         if !imageView.frame.equalTo(frameToCenter) {
             imageView.frame = frameToCenter
         }
+        
         playerLayer?.frame = imageView.bounds
         livePhotoView?.frame = imageView.bounds
-        livePhotoBadgeView.frame = CGRect(
-            x: imageView.frame.minX + 16,
-            y: imageView.frame.minY + 48,
-            width: 24,
-            height: 24)
     }
     
     open func setMaxMinZoomScalesForCurrentBounds() {
@@ -191,7 +164,7 @@ open class SKZoomingScrollView: UIScrollView {
             return
         }
         
-        let boundsSize = safeAreaAdjustedBounds.size
+        let boundsSize = bounds.size
         let imageSize = imageView.frame.size
         
         let xScale = boundsSize.width / imageSize.width
@@ -261,9 +234,8 @@ open class SKZoomingScrollView: UIScrollView {
         imageViewFrame.origin = .zero
         // long photo
         if SKPhotoBrowserOptions.longPhotoWidthMatchScreen && image.size.height >= image.size.width {
-            let width = safeAreaAdjustedBounds.width
-            let imageHeight = width / image.size.width * image.size.height
-            imageViewFrame.size = CGSize(width: width, height: imageHeight)
+            let imageHeight = SKMesurement.screenWidth / image.size.width * image.size.height
+            imageViewFrame.size = CGSize(width: SKMesurement.screenWidth, height: imageHeight)
         } else {
             imageViewFrame.size = image.size
         }
@@ -282,7 +254,7 @@ open class SKZoomingScrollView: UIScrollView {
         zoomScale = 1
         
         if !flag {
-            indicatorView.progress = 0
+            indicatorView.progress = 1
             photo?.loadUnderlyingImageAndNotify()
         } else {
             indicatorView.progress = photo?.progress ?? 0
@@ -323,6 +295,10 @@ open class SKZoomingScrollView: UIScrollView {
         player?.pause()
         isMediaPlaying = false
         updatePlayButton()
+    }
+
+    func toggleMediaPlayback() {
+        togglePlayback()
     }
 
     @objc func togglePlayback() {
@@ -431,14 +407,6 @@ extension SKZoomingScrollView: PHLivePhotoViewDelegate {
 }
 
 private extension SKZoomingScrollView {
-    var safeAreaAdjustedBounds: CGRect {
-        guard #available(iOS 11.0, *) else {
-            return bounds
-        }
-        let rect = bounds.inset(by: safeAreaInsets)
-        return CGRect(origin: rect.origin, size: CGSize(width: rect.width, height: rect.height - 24))
-    }
-
     func displayMediaIfPossible() -> Bool {
         guard let mediaPhoto = photo as? SKPhotoMediaProtocol else {
             return false
@@ -461,7 +429,7 @@ private extension SKZoomingScrollView {
             let player = AVPlayer(url: videoURL)
             let layer = AVPlayerLayer(player: player)
             layer.videoGravity = .resizeAspect
-            layer.frame = imageView.bounds.insetBy(dx: 0, dy: 48)
+            layer.frame = imageView.bounds
             imageView.layer.addSublayer(layer)
 
             self.player = player
@@ -488,7 +456,7 @@ private extension SKZoomingScrollView {
             configureMediaFrame()
             imageView.image = nil
 
-            let liveView = PHLivePhotoView(frame: imageView.bounds.insetBy(dx: 0, dy: 48))
+            let liveView = PHLivePhotoView(frame: imageView.bounds)
             liveView.livePhoto = livePhoto
             liveView.contentMode = .scaleAspectFit
             liveView.clipsToBounds = true
@@ -504,7 +472,7 @@ private extension SKZoomingScrollView {
     }
 
     func configureMediaFrame() {
-        var size = safeAreaAdjustedBounds.size
+        var size = bounds.size
         if let imageSize = photo?.underlyingImage?.size, imageSize != .zero {
             size = imageSize
         }
@@ -537,24 +505,11 @@ private extension SKZoomingScrollView {
     }
 
     func updatePlayButton(hidden: Bool? = nil) {
-        if let hidden = hidden {
-            playButton.isHidden = hidden || (photo?.progress ?? 0) < 1
-        } else {
-            playButton.isHidden = (player == nil && livePhotoView == nil) || (photo?.progress ?? 0) < 1
-        }
-        if #available(iOS 13.0, *) {
-            if isMediaPlaying{
-                playButton.setImage(nil, for: .normal)
-            }else{
-                playButton.setImage(UIImage(systemName: "play.circle", withConfiguration: UIImage.SymbolConfiguration(pointSize: 48)), for: .normal)
-            }
-        } else {
-            playButton.setTitle(isMediaPlaying ? "Pause" : "Play", for: .normal)
-        }
+        browser?.refreshMediaControls(for: self)
     }
 
     func updateLivePhotoBadge(hidden: Bool) {
-        livePhotoBadgeView.isHidden = hidden
+        browser?.refreshMediaControls(for: self)
     }
 
     func getViewFramePercent(_ view: UIView, touch: UITouch) -> CGPoint {

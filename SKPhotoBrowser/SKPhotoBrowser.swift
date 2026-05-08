@@ -147,6 +147,7 @@ open class SKPhotoBrowser: UIViewController {
         
         // action
         actionView.updateFrame(frame: view.frame)
+        refreshMediaControlsForCurrentPage()
 
         // paging
         switch SKCaptionOptions.captionLocation {
@@ -211,6 +212,7 @@ open class SKPhotoBrowser: UIViewController {
         pagingScrollView.reload()
         pagingScrollView.updateContentOffset(currentPageIndex)
         pagingScrollView.tilePages()
+        refreshMediaControlsForCurrentPage()
         
         delegate?.didShowPhotoAtIndex?(self, index: currentPageIndex)
         
@@ -406,6 +408,17 @@ public extension SKPhotoBrowser {
 internal extension SKPhotoBrowser {
     func showButtons() {
         actionView.animate(hidden: false)
+    }
+
+    func refreshMediaControls(for page: SKZoomingScrollView) {
+        guard page === pagingScrollView.pageDisplayedAtIndex(currentPageIndex) else {
+            return
+        }
+        actionView?.updateMediaControls(for: page)
+    }
+
+    func refreshMediaControlsForCurrentPage() {
+        actionView?.updateMediaControls(for: pagingScrollView.pageDisplayedAtIndex(currentPageIndex))
     }
     
     func pageDisplayedAtIndex(_ index: Int) -> SKZoomingScrollView? {
@@ -619,6 +632,7 @@ private extension SKPhotoBrowser {
     func configureActionView() {
         actionView = SKActionView(frame: view.frame, browser: self)
         view.addSubview(actionView)
+        refreshMediaControlsForCurrentPage()
     }
 
     func configurePaginationView() {
@@ -675,6 +689,7 @@ extension SKPhotoBrowser: UIScrollViewDelegate {
         if currentPageIndex != previousCurrentPage {
             delegate?.didShowPhotoAtIndex?(self, index: currentPageIndex)
             paginationView.update(currentPageIndex)
+            refreshMediaControlsForCurrentPage()
         }
     }
     
