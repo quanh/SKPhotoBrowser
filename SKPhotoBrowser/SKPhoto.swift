@@ -118,15 +118,8 @@ open class SKPhoto: NSObject, SKPhotoProtocol, SKPhotoMediaProtocol {
             return
         }
         
-        if SKCache.sharedCache.imageCache is SKRequestResponseCacheable {
-            let request = URLRequest(url: URL(string: photoURL)!)
-            if let img = SKCache.sharedCache.imageForRequest(request) {
-                underlyingImage = img
-            }
-        } else {
-            if let img = SKCache.sharedCache.imageForKey(photoURL) {
-                underlyingImage = img
-            }
+        if let image = cachedImage(for: photoURL) {
+            underlyingImage = image
         }
     }
     
@@ -144,26 +137,14 @@ open class SKPhoto: NSObject, SKPhotoProtocol, SKPhotoMediaProtocol {
 
         guard photoURL != nil, let URL = URL(string: photoURL) else { return }
         
-        if self.shouldCachePhotoURLImage {
-            if SKCache.sharedCache.imageCache is SKRequestResponseCacheable {
-                let request = URLRequest(url: URL)
-                if let img = SKCache.sharedCache.imageForRequest(request) {
-                    DispatchQueue.main.async {
-                        self.underlyingImage = img
-                        self.loadUnderlyingImageComplete()
-                    }
-                    return
-                }
-            } else {
-                if let img = SKCache.sharedCache.imageForKey(photoURL) {
-                    DispatchQueue.main.async {
-                        self.underlyingImage = img
-                        self.loadUnderlyingImageComplete()
-                    }
-                    return
-                }
+        if self.shouldCachePhotoURLImage, let image = cachedImage(for: photoURL) {
+            DispatchQueue.main.async {
+                self.underlyingImage = image
+                self.loadUnderlyingImageComplete()
             }
+            return
         }
+
         progress = 0
         progressChanged?(self)
         // Fetch Image
@@ -209,6 +190,58 @@ open class SKPhoto: NSObject, SKPhotoProtocol, SKPhotoMediaProtocol {
         progress = 1
         progressChanged?(self)
     }
+
+    @objc open func getCachedFileURL() -> URL? {
+        switch mediaType {
+        case .image:
+            guard let photoURL = photoURL else {
+                return nil
+            }
+            if let url = URL(string: photoURL), url.isFileURL{
+                return url
+            }
+            return cachedImageFileURL(for: photoURL)
+        case .video:
+            guard let sourceURL = videoURL ?? urlFromString(photoURL) else {
+                return nil
+            }
+            if sourceURL.isFileURL{
+                return sourceURL
+            }
+            return cachedDataFileURL(for: sourceURL.absoluteString)
+        case .livePhoto:
+            guard let imageURL = livePhotoImageURL else {
+                return nil
+            }
+            if imageURL.isFileURL{
+                return imageURL
+            }
+            return cachedDataFileURL(for: imageURL.absoluteString)
+        }
+    }
+
+    @objc open func getCachedVideoFileURL() -> URL? {
+        switch mediaType {
+        case .video:
+            guard let sourceURL = videoURL ?? urlFromString(photoURL) else {
+                return nil
+            }
+            if sourceURL.isFileURL{
+                return sourceURL
+            }
+            return cachedDataFileURL(for: sourceURL.absoluteString)
+        case .livePhoto:
+            guard let videoURL = livePhotoVideoURL else {
+                return nil
+            }
+            if videoURL.isFileURL{
+                return videoURL
+            }
+            return cachedDataFileURL(for: videoURL.absoluteString)
+        case .image:
+            return nil
+        }
+    }
     
 }
 
@@ -225,6 +258,46 @@ private extension SKPhoto {
         DispatchQueue.main.async {
             self.progressChanged?(self)
         }
+    }
+
+    func cachedImage(for key: String) -> UIImage? {
+        if let image = SKCache.sharedCache.imageForKey(key) {
+            return image
+        }
+        guard let url = urlFromString(key) else {
+            return nil
+        }
+        return SKCache.sharedCache.imageForRequest(URLRequest(url: url))
+    }
+
+    func cachedData(for key: String) -> Data? {
+        if let data = SKCache.sharedCache.dataForKey(key) {
+            return data
+        }
+        guard let url = urlFromString(key) else {
+            return nil
+        }
+        return SKCache.sharedCache.dataForRequest(URLRequest(url: url))
+    }
+
+    func cachedImageFileURL(for key: String) -> URL? {
+        if let url = SKCache.sharedCache.imageURLForKey(key) {
+            return url
+        }
+        guard let url = urlFromString(key) else {
+            return nil
+        }
+        return SKCache.sharedCache.responseURLForRequest(URLRequest(url: url))
+    }
+
+    func cachedDataFileURL(for key: String) -> URL? {
+        if let url = SKCache.sharedCache.dataURLForKey(key) {
+            return url
+        }
+        guard let url = urlFromString(key) else {
+            return nil
+        }
+        return SKCache.sharedCache.responseURLForRequest(URLRequest(url: url))
     }
 
     func startDownload(_ url: URL, kind: DownloadKind, session: URLSession? = nil) {
@@ -268,12 +341,14 @@ private extension SKPhoto {
 
         switch mediaType {
         case .video:
-            guard let key = photoURL, let data = SKCache.sharedCache.dataForKey(key) else { return }
-            videoURL = writeCachedData(data, cacheKey: key, fileExtension: videoURL?.pathExtension)
+            guard let sourceURL = videoURL ?? urlFromString(photoURL) else { return }
+            let key = sourceURL.absoluteString
+            guard let data = cachedData(for: key) else { return }
+            videoURL = writeCachedData(data, cacheKey: key, fileExtension: sourceURL.pathExtension)
         case .livePhoto:
             guard let imageURL = livePhotoImageURL, let videoURL = livePhotoVideoURL,
-                  SKCache.sharedCache.dataForKey(imageURL.absoluteString) != nil,
-                  SKCache.sharedCache.dataForKey(videoURL.absoluteString) != nil else {
+                  cachedData(for: imageURL.absoluteString) != nil,
+                  cachedData(for: videoURL.absoluteString) != nil else {
                 return
             }
             prepareLivePhotoFromCachedResources()
@@ -287,7 +362,6 @@ private extension SKPhoto {
             loadUnderlyingImageComplete()
             return
         }
-        loadCoverImageIfNeeded()
 
         if sourceURL.isFileURL {
             videoURL = sourceURL
@@ -296,7 +370,7 @@ private extension SKPhoto {
         }
 
         let key = sourceURL.absoluteString
-        if shouldCachePhotoURLImage, let data = SKCache.sharedCache.dataForKey(key) {
+        if shouldCachePhotoURLImage, let data = cachedData(for: key) {
             videoURL = writeCachedData(data, cacheKey: key, fileExtension: sourceURL.pathExtension)
             loadUnderlyingImageComplete()
             return
@@ -321,7 +395,6 @@ private extension SKPhoto {
             loadUnderlyingImageComplete()
             return
         }
-        loadCoverImageIfNeeded()
 
         if imageURL.isFileURL && videoURL.isFileURL {
             requestLivePhoto(imageURL: imageURL, videoURL: videoURL)
@@ -329,8 +402,8 @@ private extension SKPhoto {
         }
 
         if shouldCachePhotoURLImage,
-           SKCache.sharedCache.dataForKey(imageURL.absoluteString) != nil,
-           SKCache.sharedCache.dataForKey(videoURL.absoluteString) != nil {
+           cachedData(for: imageURL.absoluteString) != nil,
+           cachedData(for: videoURL.absoluteString) != nil {
             prepareLivePhotoFromCachedResources()
             return
         }
@@ -360,7 +433,7 @@ private extension SKPhoto {
                 await MainActor.run {
                     PHLivePhoto.request(
                         withResourceFileURLs: [imageURL, videoURL],
-                        placeholderImage: self.underlyingImage,
+                        placeholderImage: nil,
                         targetSize: .zero,
                         contentMode: .aspectFit) { livePhoto, _ in
                             self.livePhoto = livePhoto
@@ -612,12 +685,16 @@ private actor SKLivePhotos {
     }
 
     private func cachesDirectory(component: String = "SKLivePhotos") throws -> URL {
-        if let cachesDirectoryURL = try? FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: false) {
-            let cachesDirectory = cachesDirectoryURL.appendingPathComponent(component, isDirectory: true)
-            if !FileManager.default.fileExists(atPath: cachesDirectory.path) {
-                try? FileManager.default.createDirectory(at: cachesDirectory, withIntermediateDirectories: true, attributes: nil)
+        if let storageDirectoryURL = try? FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true) {
+            let directory = storageDirectoryURL.appendingPathComponent(component, isDirectory: true)
+            if !FileManager.default.fileExists(atPath: directory.path) {
+                try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
             }
-            return cachesDirectory
+            return directory
         }
         throw SKLivePhotosError.noCachesDirectory
     }
@@ -662,8 +739,8 @@ private extension SKPhoto {
         guard #available(iOS 9.1, *),
               let imageURL = livePhotoImageURL,
               let videoURL = livePhotoVideoURL,
-              let imageData = SKCache.sharedCache.dataForKey(imageURL.absoluteString),
-              let videoData = SKCache.sharedCache.dataForKey(videoURL.absoluteString) else {
+              let imageData = cachedData(for: imageURL.absoluteString),
+              let videoData = cachedData(for: videoURL.absoluteString) else {
             loadUnderlyingImageComplete()
             return
         }
@@ -737,7 +814,7 @@ extension SKPhoto: URLSessionDelegate, URLSessionDownloadDelegate {
         case .livePhotoImage, .livePhotoVideo:
             handleDownloadedLivePhotoResource(data, kind: kind, session: session)
         case .image:
-            handleDownloadedImage(data)
+            handleDownloadedImage(data, downloadTask: downloadTask)
             session.finishTasksAndInvalidate()
         }
     }
@@ -787,7 +864,7 @@ extension SKPhoto: URLSessionDelegate, URLSessionDownloadDelegate {
         requestLivePhoto(imageURL: cachedImageURL, videoURL: cachedVideoURL)
     }
 
-    private func handleDownloadedImage(_ data: Data) {
+    private func handleDownloadedImage(_ data: Data, downloadTask: URLSessionDownloadTask) {
         guard let image = UIImage.animatedImage(withAnimatedGIFData: data) else {
             DispatchQueue.main.async {
                 self.loadUnderlyingImageComplete()
@@ -795,6 +872,9 @@ extension SKPhoto: URLSessionDelegate, URLSessionDownloadDelegate {
             return
         }
         if shouldCachePhotoURLImage {
+            if let response = downloadTask.response {
+                SKCache.sharedCache.setImageData(data, response: response, request: downloadTask.originalRequest)
+            }
             SKCache.sharedCache.setImage(image, forKey: photoURL)
         }
         DispatchQueue.main.async {

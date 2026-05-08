@@ -22,6 +22,9 @@ open class SKZoomingScrollView: UIScrollView {
                     }
                     self.indicatorView.progress = p.progress
                     self.updatePlayButton()
+                    guard (p as? SKPhotoMediaProtocol)?.mediaType ?? .image == .image else {
+                        return
+                    }
                     if self.playerLayer == nil,
                        self.livePhotoView == nil,
                        let image = p.underlyingImage {
@@ -100,12 +103,15 @@ open class SKZoomingScrollView: UIScrollView {
 
         // play
         playButton = UIButton(type: .custom)
-        playButton.backgroundColor = UIColor(white: 0, alpha: 0.55)
-        playButton.layer.cornerRadius = 28
-        playButton.layer.masksToBounds = true
         playButton.tintColor = .white
+        playButton.imageView?.contentMode = .scaleAspectFill
+        if #available(iOS 17.0, *) {
+            playButton.imageView?.preferredImageDynamicRange = .high
+        } else {
+            // Fallback on earlier versions
+        }
         if #available(iOS 13.0, *) {
-            playButton.setImage(UIImage(systemName: "play.circle"), for: .normal)
+            playButton.setImage(UIImage(systemName: "play.circle", withConfiguration: UIImage.SymbolConfiguration(pointSize: 48)), for: .normal)
         }
         playButton.isHidden = true
         playButton.addTarget(self, action: #selector(togglePlayback), for: .touchUpInside)
@@ -113,12 +119,9 @@ open class SKZoomingScrollView: UIScrollView {
 
         livePhotoBadgeView = UIImageView()
         livePhotoBadgeView.tintColor = .white
-        livePhotoBadgeView.backgroundColor = UIColor(white: 0, alpha: 0.45)
-        livePhotoBadgeView.layer.cornerRadius = 12
-        livePhotoBadgeView.layer.masksToBounds = true
         livePhotoBadgeView.contentMode = .center
         if #available(iOS 13.0, *) {
-            livePhotoBadgeView.image = UIImage(systemName: "livephoto")
+            livePhotoBadgeView.image = UIImage(systemName: "livephoto", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24))
         }
         livePhotoBadgeView.isHidden = true
         addSubview(livePhotoBadgeView)
@@ -142,9 +145,9 @@ open class SKZoomingScrollView: UIScrollView {
             width: 56,
             height: 56)
         livePhotoBadgeView.frame = CGRect(
-            x: imageView.frame.minX + 8,
-            y: imageView.frame.minY + 8,
-            width: 32,
+            x: imageView.frame.minX + 16,
+            y: imageView.frame.minY + 48,
+            width: 24,
             height: 24)
         
         super.layoutSubviews()
@@ -173,9 +176,9 @@ open class SKZoomingScrollView: UIScrollView {
         playerLayer?.frame = imageView.bounds
         livePhotoView?.frame = imageView.bounds
         livePhotoBadgeView.frame = CGRect(
-            x: imageView.frame.minX + 8,
-            y: imageView.frame.minY + 8,
-            width: 32,
+            x: imageView.frame.minX + 16,
+            y: imageView.frame.minY + 48,
+            width: 24,
             height: 24)
     }
     
@@ -250,7 +253,7 @@ open class SKZoomingScrollView: UIScrollView {
         clearMediaViews()
         // image
         imageView.image = image
-        imageView.contentMode = photo?.contentMode ?? .scaleAspectFill
+        imageView.contentMode = .scaleAspectFit
         updatePlayButton(hidden: true)
         updateLivePhotoBadge(hidden: true)
         
@@ -279,7 +282,7 @@ open class SKZoomingScrollView: UIScrollView {
         zoomScale = 1
         
         if !flag {
-            indicatorView.progress = photo?.progress ?? 0
+            indicatorView.progress = 0
             photo?.loadUnderlyingImageAndNotify()
         } else {
             indicatorView.progress = photo?.progress ?? 0
@@ -445,17 +448,20 @@ private extension SKZoomingScrollView {
         case .image:
             return false
         case .video:
+            guard (photo?.progress ?? 0) >= 1 else {
+                return false
+            }
             guard let videoURL = mediaPhoto.videoURL else {
                 return false
             }
             configureMediaFrame()
-            imageView.image = photo?.underlyingImage
-            imageView.contentMode = photo?.contentMode ?? .scaleAspectFill
+            imageView.image = nil
+            imageView.contentMode = .scaleAspectFit
 
             let player = AVPlayer(url: videoURL)
             let layer = AVPlayerLayer(player: player)
             layer.videoGravity = .resizeAspect
-            layer.frame = imageView.bounds
+            layer.frame = imageView.bounds.insetBy(dx: 0, dy: 48)
             imageView.layer.addSublayer(layer)
 
             self.player = player
@@ -473,15 +479,18 @@ private extension SKZoomingScrollView {
             updatePlayButton(hidden: false)
             return true
         case .livePhoto:
+            guard (photo?.progress ?? 0) >= 1 else {
+                return false
+            }
             guard #available(iOS 9.1, *), let livePhoto = mediaPhoto.livePhoto else {
                 return false
             }
             configureMediaFrame()
             imageView.image = nil
 
-            let liveView = PHLivePhotoView(frame: imageView.bounds)
+            let liveView = PHLivePhotoView(frame: imageView.bounds.insetBy(dx: 0, dy: 48))
             liveView.livePhoto = livePhoto
-            liveView.contentMode = photo?.contentMode ?? .scaleAspectFill
+            liveView.contentMode = .scaleAspectFit
             liveView.clipsToBounds = true
             liveView.delegate = self
             imageView.addSubview(liveView)
@@ -534,8 +543,11 @@ private extension SKZoomingScrollView {
             playButton.isHidden = (player == nil && livePhotoView == nil) || (photo?.progress ?? 0) < 1
         }
         if #available(iOS 13.0, *) {
-            let imageName = isMediaPlaying ? "pause.circle" : "play.circle"
-            playButton.setImage(UIImage(systemName: imageName), for: .normal)
+            if isMediaPlaying{
+                playButton.setImage(nil, for: .normal)
+            }else{
+                playButton.setImage(UIImage(systemName: "play.circle", withConfiguration: UIImage.SymbolConfiguration(pointSize: 48)), for: .normal)
+            }
         } else {
             playButton.setTitle(isMediaPlaying ? "Pause" : "Play", for: .normal)
         }

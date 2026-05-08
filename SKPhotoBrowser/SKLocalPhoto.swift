@@ -68,7 +68,6 @@ open class SKLocalPhoto: NSObject, SKPhotoProtocol, SKPhotoMediaProtocol {
     open func loadUnderlyingImageAndNotify() {
         switch mediaType {
         case .video:
-            loadCoverImageIfNeeded()
             if videoURL == nil, let photoURL = photoURL {
                 videoURL = URL(fileURLWithPath: photoURL)
             }
@@ -145,14 +144,12 @@ private extension SKLocalPhoto {
             loadUnderlyingImageComplete()
             return
         }
-        loadCoverImageIfNeeded()
-
         if livePhoto != nil {
             loadUnderlyingImageComplete()
             return
         }
 
-        PHLivePhoto.request(withResourceFileURLs: [imageURL, videoURL], placeholderImage: underlyingImage, targetSize: .zero, contentMode: .aspectFit) { [weak self] livePhoto, _ in
+        PHLivePhoto.request(withResourceFileURLs: [imageURL, videoURL], placeholderImage: nil, targetSize: .zero, contentMode: .aspectFit) { [weak self] livePhoto, _ in
             guard let self = self else { return }
             self.livePhoto = livePhoto
             DispatchQueue.main.async {

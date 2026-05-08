@@ -81,14 +81,18 @@ open class SKCache {
     }
 
     open func imageForRequest(_ request: URLRequest) -> UIImage? {
+        guard let data = dataForRequest(request) else {
+            return nil
+        }
+        return UIImage(data: data)
+    }
+
+    open func dataForRequest(_ request: URLRequest) -> Data? {
         guard let cache = imageCache as? SKRequestResponseCacheable else {
             return nil
         }
-        
-        if let response = cache.cachedResponseForRequest(request) {
-            return UIImage(data: response.data)
-        }
-        return nil
+
+        return cache.cachedResponseForRequest(request)?.data
     }
 
     open func setImageData(_ data: Data, response: URLResponse, request: URLRequest?) {
@@ -98,46 +102,186 @@ open class SKCache {
         let cachedResponse = CachedURLResponse(response: response, data: data)
         cache.storeCachedResponse(cachedResponse, forRequest: request)
     }
+
+    open func imageURLForKey(_ key: String) -> URL? {
+        guard let cache = imageCache as? SKFileCacheable else {
+            return nil
+        }
+
+        return cache.imageURLForKey(key)
+    }
+
+    open func dataURLForKey(_ key: String) -> URL? {
+        guard let cache = imageCache as? SKFileCacheable else {
+            return nil
+        }
+
+        return cache.dataURLForKey(key)
+    }
+
+    open func responseURLForRequest(_ request: URLRequest) -> URL? {
+        guard let cache = imageCache as? SKFileCacheable else {
+            return nil
+        }
+
+        return cache.responseURLForRequest(request)
+    }
 }
 
-class SKDefaultImageCache: SKImageCacheable, SKDataCacheable {
-    var cache: NSCache<AnyObject, AnyObject>
-    var dataCache: NSCache<AnyObject, AnyObject>
+class SKDefaultImageCache: SKImageCacheable, SKDataCacheable, SKRequestResponseCacheable, SKFileCacheable {
+    private let fileManager: FileManager
+    let rootDirectory: URL
+    let imageDirectory: URL
+    let dataDirectory: URL
+    let responseDirectory: URL
 
-    init() {
-        cache = NSCache()
-        dataCache = NSCache()
+    init(fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+        let storageDirectory = (try? fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true)) ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        rootDirectory = storageDirectory.appendingPathComponent("SKPhotoBrowserCache", isDirectory: true)
+        imageDirectory = rootDirectory.appendingPathComponent("Images", isDirectory: true)
+        dataDirectory = rootDirectory.appendingPathComponent("Data", isDirectory: true)
+        responseDirectory = rootDirectory.appendingPathComponent("Responses", isDirectory: true)
+        createDirectoriesIfNeeded()
     }
 
     func imageForKey(_ key: String) -> UIImage? {
-        return cache.object(forKey: key as AnyObject) as? UIImage
+        guard let url = imageURLForKey(key),
+              let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        return UIImage(data: data)
     }
 
     func setImage(_ image: UIImage, forKey key: String) {
-        cache.setObject(image, forKey: key as AnyObject)
+        guard let data = image.pngData() ?? image.jpegData(compressionQuality: 1) else {
+            return
+        }
+        try? data.write(to: imageFileURL(for: key), options: .atomic)
     }
 
     func removeImageForKey(_ key: String) {
-        cache.removeObject(forKey: key as AnyObject)
+        removeCachedFile(at: imageFileURL(for: key))
     }
     
     func removeAllImages() {
-        cache.removeAllObjects()
+        removeContents(of: imageDirectory)
     }
 
     func dataForKey(_ key: String) -> Data? {
-        return dataCache.object(forKey: key as AnyObject) as? Data
+        guard let url = dataURLForKey(key) else {
+            return nil
+        }
+        return try? Data(contentsOf: url)
     }
 
     func setData(_ data: Data, forKey key: String) {
-        dataCache.setObject(data as AnyObject, forKey: key as AnyObject)
+        try? data.write(to: dataFileURL(for: key), options: .atomic)
     }
 
     func removeDataForKey(_ key: String) {
-        dataCache.removeObject(forKey: key as AnyObject)
+        removeCachedFile(at: dataFileURL(for: key))
     }
 
     func removeAllData() {
-        dataCache.removeAllObjects()
+        removeContents(of: dataDirectory)
+    }
+
+    func cachedResponseForRequest(_ request: URLRequest) -> CachedURLResponse? {
+        guard let url = request.url,
+              let responseURL = responseURLForRequest(request),
+              let data = try? Data(contentsOf: responseURL) else {
+            return nil
+        }
+        let response = URLResponse(
+            url: url,
+            mimeType: nil,
+            expectedContentLength: data.count,
+            textEncodingName: nil)
+        return CachedURLResponse(response: response, data: data)
+    }
+
+    func storeCachedResponse(_ cachedResponse: CachedURLResponse, forRequest request: URLRequest) {
+        try? cachedResponse.data.write(to: responseFileURL(for: request), options: .atomic)
+    }
+
+    func imageURLForKey(_ key: String) -> URL? {
+        return existingURL(for: imageFileURL(for: key))
+    }
+
+    func dataURLForKey(_ key: String) -> URL? {
+        return existingURL(for: dataFileURL(for: key))
+    }
+
+    func responseURLForRequest(_ request: URLRequest) -> URL? {
+        return existingURL(for: responseFileURL(for: request))
+    }
+
+    private func createDirectoriesIfNeeded() {
+        [rootDirectory, imageDirectory, dataDirectory, responseDirectory].forEach { directory in
+            try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+    }
+
+    private func imageFileURL(for key: String) -> URL {
+        return imageDirectory
+            .appendingPathComponent(cacheFileName(for: key, fallbackExtension: "png"))
+    }
+
+    private func dataFileURL(for key: String) -> URL {
+        return dataDirectory
+            .appendingPathComponent(cacheFileName(for: key, fallbackExtension: "data"))
+    }
+
+    private func responseFileURL(for request: URLRequest) -> URL {
+        let key = request.url?.absoluteString ?? "\(request.hashValue)"
+        return responseDirectory
+            .appendingPathComponent(cacheFileName(for: key, fallbackExtension: "response"))
+    }
+
+    private func cacheFileName(for key: String, fallbackExtension: String) -> String {
+        let component = lastPathComponent(for: key)
+        if !component.isEmpty {
+            return component
+        }
+        return "skphoto-cache.\(fallbackExtension)"
+    }
+
+    private func removeContents(of directory: URL) {
+        guard let urls = try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
+            return
+        }
+        urls.forEach { try? fileManager.removeItem(at: $0) }
+    }
+
+    private func existingURL(for url: URL) -> URL? {
+        return fileManager.fileExists(atPath: url.path) ? url : nil
+    }
+
+    private func removeCachedFile(at url: URL) {
+        try? fileManager.removeItem(at: url)
+    }
+
+    private func lastPathComponent(for key: String) -> String {
+        if let url = URL(string: key), !url.lastPathComponent.isEmpty, url.lastPathComponent != "/" {
+            return safeFileName(url.lastPathComponent)
+        }
+        let component = URL(fileURLWithPath: key).lastPathComponent
+        if !component.isEmpty, component != "/" {
+            return safeFileName(component)
+        }
+        return ""
+    }
+
+    private func safeFileName(_ filename: String) -> String {
+        let invalidCharacters = CharacterSet(charactersIn: "/\\:")
+            .union(.newlines)
+            .union(.controlCharacters)
+        return filename.components(separatedBy: invalidCharacters).joined(separator: "_")
     }
 }

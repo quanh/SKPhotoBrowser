@@ -207,7 +207,7 @@ open class SKPhotoBrowser: UIViewController {
     open func performLayout() {
         isPerformingLayout = true
 
-        // reset local cache
+        // reset visible pages
         pagingScrollView.reload()
         pagingScrollView.updateContentOffset(currentPageIndex)
         pagingScrollView.tilePages()

@@ -12,7 +12,7 @@ import XCTest
 class SKCacheTests: XCTestCase {
 
     var cache: SKCache!
-    let image = UIImage()
+    var image: UIImage!
     let key = "test_image"
     let data = Data([0x01, 0x02, 0x03])
 
@@ -20,9 +20,18 @@ class SKCacheTests: XCTestCase {
         super.setUp()
 
         self.cache = SKCache()
+        self.image = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+        self.cache.removeAllImages()
+        self.cache.removeAllData()
     }
 
     override func tearDown() {
+        self.cache.removeAllImages()
+        self.cache.removeAllData()
+        self.image = nil
         self.cache = nil
 
         super.tearDown()
@@ -35,8 +44,7 @@ class SKCacheTests: XCTestCase {
 
     func testDefaultCacheImageForKey() {
         // given
-        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.cache
-        cache.setObject(self.image, forKey: self.key as AnyObject)
+        self.cache.setImage(self.image, forKey: self.key)
 
         // when
         let cachedImage = self.cache.imageForKey(self.key)
@@ -50,15 +58,13 @@ class SKCacheTests: XCTestCase {
         self.cache.setImage(self.image, forKey: self.key)
 
         // then
-        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.cache
-        let cachedImage = cache.object(forKey: self.key as AnyObject) as? UIImage
+        let cachedImage = self.cache.imageForKey(self.key)
         XCTAssertNotNil(cachedImage)
     }
 
     func testDefaultCacheRemoveImageForKey() {
         // given
-        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.cache
-        cache.setObject(self.image, forKey: self.key as AnyObject)
+        self.cache.setImage(self.image, forKey: self.key)
 
         // when
         self.cache.removeImageForKey(self.key)
@@ -70,12 +76,11 @@ class SKCacheTests: XCTestCase {
     
     func testDefaultCacheRemoveAllImages() {
         // given
-        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.cache
-        cache.setObject(self.image, forKey: self.key as AnyObject)
+        self.cache.setImage(self.image, forKey: self.key)
         
-        let anotherImage = UIImage()
+        let anotherImage = self.image!
         let anotherKey = "another_test_image"
-        cache.setObject(anotherImage, forKey: anotherKey as AnyObject)
+        self.cache.setImage(anotherImage, forKey: anotherKey)
         
         // when
         self.cache.removeAllImages()
@@ -89,8 +94,7 @@ class SKCacheTests: XCTestCase {
 
     func testDefaultCacheDataForKey() {
         // given
-        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.dataCache
-        cache.setObject(self.data as AnyObject, forKey: self.key as AnyObject)
+        self.cache.setData(self.data, forKey: self.key)
 
         // when
         let cachedData = self.cache.dataForKey(self.key)
@@ -104,15 +108,13 @@ class SKCacheTests: XCTestCase {
         self.cache.setData(self.data, forKey: self.key)
 
         // then
-        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.dataCache
-        let cachedData = cache.object(forKey: self.key as AnyObject) as? Data
+        let cachedData = self.cache.dataForKey(self.key)
         XCTAssertEqual(cachedData, self.data)
     }
 
     func testDefaultCacheRemoveDataForKey() {
         // given
-        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.dataCache
-        cache.setObject(self.data as AnyObject, forKey: self.key as AnyObject)
+        self.cache.setData(self.data, forKey: self.key)
 
         // when
         self.cache.removeDataForKey(self.key)
@@ -123,9 +125,8 @@ class SKCacheTests: XCTestCase {
 
     func testDefaultCacheRemoveAllData() {
         // given
-        let cache = (self.cache.imageCache as? SKDefaultImageCache)!.dataCache
-        cache.setObject(self.data as AnyObject, forKey: self.key as AnyObject)
-        cache.setObject(Data([0x04]) as AnyObject, forKey: "another_test_data" as AnyObject)
+        self.cache.setData(self.data, forKey: self.key)
+        self.cache.setData(Data([0x04]), forKey: "another_test_data")
 
         // when
         self.cache.removeAllData()
@@ -133,5 +134,30 @@ class SKCacheTests: XCTestCase {
         // then
         XCTAssertNil(self.cache.dataForKey(self.key))
         XCTAssertNil(self.cache.dataForKey("another_test_data"))
+    }
+
+    func testDefaultCachePersistsDataAcrossInstances() {
+        // given
+        self.cache.setData(self.data, forKey: self.key)
+        let anotherCache = SKCache()
+
+        // when
+        let cachedData = anotherCache.dataForKey(self.key)
+
+        // then
+        XCTAssertEqual(cachedData, self.data)
+    }
+
+    func testDefaultCacheRequestResponseData() {
+        // given
+        let url = URL(string: "https://example.com/image.png")!
+        let request = URLRequest(url: url)
+        let response = URLResponse(url: url, mimeType: "image/png", expectedContentLength: data.count, textEncodingName: nil)
+
+        // when
+        self.cache.setImageData(data, response: response, request: request)
+
+        // then
+        XCTAssertEqual(self.cache.dataForRequest(request), data)
     }
 }

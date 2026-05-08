@@ -28,3 +28,9 @@ public protocol SKRequestResponseCacheable: SKCacheable {
     func cachedResponseForRequest(_ request: URLRequest) -> CachedURLResponse?
     func storeCachedResponse(_ cachedResponse: CachedURLResponse, forRequest request: URLRequest)
 }
+
+public protocol SKFileCacheable: SKCacheable {
+    func imageURLForKey(_ key: String) -> URL?
+    func dataURLForKey(_ key: String) -> URL?
+    func responseURLForRequest(_ request: URLRequest) -> URL?
+}
