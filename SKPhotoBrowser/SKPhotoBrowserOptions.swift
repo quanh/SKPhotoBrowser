@@ -37,7 +37,7 @@ public struct SKPhotoBrowserOptions {
     /// Set this property to **true** for swap they.
     ///
     /// Default: false
-    public static var swapCloseAndDeleteButtons: Bool = false
+    public static var swapActionButtons: Bool = false
     public static var disableVerticalSwipe: Bool = false
 
     /// if this value is true, the long photo width will match the screen,
@@ -56,6 +56,8 @@ public struct SKPhotoBrowserOptions {
 public struct SKButtonOptions {
     public static var closeButtonPadding: CGPoint = CGPoint(x: 5, y: 20)
     public static var deleteButtonPadding: CGPoint = CGPoint(x: 5, y: 20)
+    public static var downloadButtonPadding: CGPoint = CGPoint(x: 5, y: 20)
+    public static var buttonImageSize: CGSize = CGSize(width: 24, height: 24)
 }
 
 public struct SKCaptionOptions {

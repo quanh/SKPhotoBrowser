@@ -12,8 +12,10 @@ class SKActionView: UIView {
     internal weak var browser: SKPhotoBrowser?
     internal var closeButton: SKCloseButton!
     internal var deleteButton: SKDeleteButton!
+    internal var downloadButton: SKDownloadButton!
     internal var playButton: UIButton!
     internal var livePhotoBadgeView: UIImageView!
+    fileprivate var actionType: SKPhotoBrowserActionType = .none
     
     // Action
     fileprivate var cancelTitle = "Cancel"
@@ -32,13 +34,16 @@ class SKActionView: UIView {
 
         configureCloseButton()
         configureDeleteButton()
+        configureDownloadButton()
         configureMediaControls()
+        updateToolbarType(browser.actionType)
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         if let view = super.hitTest(point, with: event) {
-            if closeButton.frame.contains(point)
-                || deleteButton.frame.contains(point)
+            if (!closeButton.isHidden && closeButton.frame.contains(point))
+                || (!deleteButton.isHidden && deleteButton.frame.contains(point))
+                || (!downloadButton.isHidden && downloadButton.frame.contains(point))
                 || (!playButton.isHidden && playButton.frame.contains(point)) {
                 return view
             }
@@ -51,6 +56,11 @@ class SKActionView: UIView {
         self.frame = frame
         layoutMediaControls()
         setNeedsDisplay()
+    }
+
+    func updateToolbarType(_ actionType: SKPhotoBrowserActionType) {
+        self.actionType = actionType
+        updateToolButtonsVisibility()
     }
 
     func updateMediaControls(for page: SKZoomingScrollView?) {
@@ -74,18 +84,27 @@ class SKActionView: UIView {
         }
         layoutMediaControls()
     }
-
-    func updateCloseButton(image: UIImage, size: CGSize? = nil) {
-        configureCloseButton(image: image, size: size)
-    }
     
-    func updateDeleteButton(image: UIImage, size: CGSize? = nil) {
-        configureDeleteButton(image: image, size: size)
+    
+
+    func updateActionButton(type: SKPhotoBrowserActionType, image: UIImage, size: CGSize? = nil) {
+        switch type {
+        case .none:
+            break
+        case .close:
+            configureCloseButton(image: image, size: size)
+        case .delete:
+            configureDeleteButton(image: image, size: size)
+        case .download:
+            configureDownloadButton(image: image, size: size)
+        }
     }
+
     
     func animate(hidden: Bool) {
         let closeFrame: CGRect = hidden ? closeButton.hideFrame : closeButton.showFrame
         let deleteFrame: CGRect = hidden ? deleteButton.hideFrame : deleteButton.showFrame
+        let downloadFrame: CGRect = hidden ? downloadButton.hideFrame : downloadButton.showFrame
         UIView.animate(withDuration: 0.35,
                        animations: { () -> Void in
                         let alpha: CGFloat = hidden ? 0.0 : 1.0
@@ -94,23 +113,31 @@ class SKActionView: UIView {
                             self.closeButton.alpha = alpha
                             self.closeButton.frame = closeFrame
                         }
-                        if SKPhotoBrowserOptions.displayDeleteButton {
+                        if !self.deleteButton.isHidden {
                             self.deleteButton.alpha = alpha
                             self.deleteButton.frame = deleteFrame
+                        }
+                        if !self.downloadButton.isHidden {
+                            self.downloadButton.alpha = alpha
+                            self.downloadButton.frame = downloadFrame
                         }
         }, completion: nil)
     }
     
-    @objc func closeButtonPressed(_ sender: UIButton) {
+    @objc func closeButtonPressed(_ sender: UIControl) {
         browser?.determineAndClose()
     }
     
-    @objc func deleteButtonPressed(_ sender: UIButton) {
+    @objc func deleteButtonPressed(_ sender: UIControl) {
         guard let browser = self.browser else { return }
         
         browser.delegate?.removePhoto?(browser, index: browser.currentPageIndex) { [weak self] in
             self?.browser?.deleteImage()
         }
+    }
+
+    @objc func downloadButtonPressed(_ sender: UIControl) {
+        browser?.downloadButtonOnClick()
     }
 
     @objc func playButtonPressed(_ sender: UIButton) {
@@ -121,7 +148,7 @@ class SKActionView: UIView {
 extension SKActionView {
     func configureCloseButton(image: UIImage? = nil, size: CGSize? = nil) {
         if closeButton == nil {
-            closeButton = SKCloseButton(frame: .zero)
+            closeButton = SKCloseButton(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
             closeButton.addTarget(self, action: #selector(closeButtonPressed(_:)), for: .touchUpInside)
             closeButton.isHidden = !SKPhotoBrowserOptions.displayCloseButton
             addSubview(closeButton)
@@ -138,9 +165,9 @@ extension SKActionView {
     
     func configureDeleteButton(image: UIImage? = nil, size: CGSize? = nil) {
         if deleteButton == nil {
-            deleteButton = SKDeleteButton(frame: .zero)
+            deleteButton = SKDeleteButton(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
             deleteButton.addTarget(self, action: #selector(deleteButtonPressed(_:)), for: .touchUpInside)
-            deleteButton.isHidden = !SKPhotoBrowserOptions.displayDeleteButton
+            deleteButton.isHidden = true
             addSubview(deleteButton)
         }
         
@@ -150,6 +177,23 @@ extension SKActionView {
         
         if let image = image {
             deleteButton.setImage(image, for: .normal)
+        }
+    }
+
+    func configureDownloadButton(image: UIImage? = nil, size: CGSize? = nil) {
+        if downloadButton == nil {
+            downloadButton = SKDownloadButton(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
+            downloadButton.addTarget(self, action: #selector(downloadButtonPressed(_:)), for: .touchUpInside)
+            downloadButton.isHidden = true
+            addSubview(downloadButton)
+        }
+
+        if let size = size {
+            downloadButton.setFrameSize(size)
+        }
+
+        if let image = image {
+            downloadButton.setImage(image, for: .normal)
         }
     }
 
@@ -194,5 +238,26 @@ extension SKActionView {
             y: safeAreaInsets.top + 48,
             width: 24,
             height: 24)
+    }
+
+    func updateToolButtonsVisibility() {
+        switch actionType {
+        case .none:
+            closeButton.isHidden = true
+            deleteButton.isHidden = true
+            downloadButton.isHidden = true
+        case .close:
+            closeButton.isHidden = false
+            deleteButton.isHidden = true
+            downloadButton.isHidden = true
+        case .delete:
+            closeButton.isHidden = false
+            deleteButton.isHidden = false
+            downloadButton.isHidden = true
+        case .download:
+            closeButton.isHidden = false
+            deleteButton.isHidden = true
+            downloadButton.isHidden = false
+        }
     }
 }

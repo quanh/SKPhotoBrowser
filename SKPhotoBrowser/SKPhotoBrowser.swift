@@ -11,8 +11,20 @@ import UIKit
 public let SKPHOTO_LOADING_DID_END_NOTIFICATION = "photoLoadingDidEndNotification"
 
 public enum SKPhotoBrowserToolBarType{
-    case share
+    case none
+    case delete
     case download
+}
+public enum SKPhotoBrowserActionType{
+    case none
+    case close
+    case delete
+    case download
+}
+
+private struct SKActionButtonConfiguration {
+    let image: UIImage
+    let size: CGSize?
 }
 
 // MARK: - SKPhotoBrowser
@@ -37,10 +49,18 @@ open class SKPhotoBrowser: UIViewController {
     let animator: SKAnimator = .init()
     
     // child component
-    fileprivate var actionView: SKActionView!
-    fileprivate(set) var paginationView: SKPaginationView!
+    lazy fileprivate var actionView: SKActionView = {
+        let view = SKActionView(frame: view.frame, browser: self)
+        return view
+    }()
+    lazy fileprivate(set) var paginationView: SKPaginationView = {
+        let view = SKPaginationView(frame: view.frame, browser: self)
+        return view
+    }()
     var toolbar: SKToolbar!
-    private var toolbarType: SKPhotoBrowserToolBarType = .share
+    private(set) var toolbarType: SKPhotoBrowserToolBarType = .none
+    private(set) var actionType: SKPhotoBrowserActionType = .none
+    private var actionButtonConfigurations: [SKPhotoBrowserActionType: SKActionButtonConfiguration] = [:]
 
     // actions
     fileprivate var activityViewController: UIActivityViewController!
@@ -78,8 +98,8 @@ open class SKPhotoBrowser: UIViewController {
         setup()
     }
     
-    public convenience init(photos: [SKPhotoProtocol], toolbarType: SKPhotoBrowserToolBarType = .share) {
-        self.init(photos: photos, initialPageIndex: 0, toolbarType: toolbarType)
+    public convenience init(photos: [SKPhotoProtocol], toolbarType: SKPhotoBrowserToolBarType = .none, actionType: SKPhotoBrowserActionType = .none) {
+        self.init(photos: photos, initialPageIndex: 0, toolbarType: toolbarType, actionType: actionType)
     }
     
     @available(*, deprecated)
@@ -91,13 +111,14 @@ open class SKPhotoBrowser: UIViewController {
         animator.senderViewForAnimation = animatedFromView
     }
     
-    public convenience init(photos: [SKPhotoProtocol], initialPageIndex: Int, toolbarType: SKPhotoBrowserToolBarType = .share) {
+    public convenience init(photos: [SKPhotoProtocol], initialPageIndex: Int, toolbarType: SKPhotoBrowserToolBarType = .none, actionType: SKPhotoBrowserActionType = .none) {
         self.init(nibName: nil, bundle: nil)
         self.photos = photos
         //self.photos.forEach { $0.checkCache() }
         self.currentPageIndex = min(initialPageIndex, photos.count - 1)
         self.initPageIndex = self.currentPageIndex
         self.toolbarType = toolbarType
+        self.actionType = actionType
         animator.senderOriginImage = photos[currentPageIndex].underlyingImage
         animator.senderViewForAnimation = photos[currentPageIndex] as? UIView
     }
@@ -302,12 +323,12 @@ private extension SKPhotoProtocol {
 // MARK: - Public Function For Customizing Buttons
 
 public extension SKPhotoBrowser {
-    func updateCloseButton(_ image: UIImage, size: CGSize? = nil) {
-        actionView.updateCloseButton(image: image, size: size)
-    }
-    
-    func updateDeleteButton(_ image: UIImage, size: CGSize? = nil) {
-        actionView.updateDeleteButton(image: image, size: size)
+    func updateActionButton(for type: SKPhotoBrowserActionType, image: UIImage, size: CGSize? = nil) {
+        actionButtonConfigurations[type] = SKActionButtonConfiguration(image: image, size: size)
+        guard isViewLoaded else {
+            return
+        }
+        actionView.updateActionButton(type: type, image: image, size: size)
     }
 }
 
@@ -414,11 +435,11 @@ internal extension SKPhotoBrowser {
         guard page === pagingScrollView.pageDisplayedAtIndex(currentPageIndex) else {
             return
         }
-        actionView?.updateMediaControls(for: page)
+        actionView.updateMediaControls(for: page)
     }
 
     func refreshMediaControlsForCurrentPage() {
-        actionView?.updateMediaControls(for: pagingScrollView.pageDisplayedAtIndex(currentPageIndex))
+        actionView.updateMediaControls(for: pagingScrollView.pageDisplayedAtIndex(currentPageIndex))
     }
     
     func pageDisplayedAtIndex(_ index: Int) -> SKZoomingScrollView? {
@@ -630,24 +651,18 @@ private extension SKPhotoBrowser {
     }
     
     func configureActionView() {
-        actionView = SKActionView(frame: view.frame, browser: self)
         view.addSubview(actionView)
+        applyActionButtonConfigurations()
         refreshMediaControlsForCurrentPage()
     }
 
     func configurePaginationView() {
-        paginationView = SKPaginationView(frame: view.frame, browser: self)
         view.addSubview(paginationView)
     }
     
     func configureToolbar() {
-        switch toolbarType{
-        case .share:
-            toolbar = SKToolbar(frame: frameForToolbarAtOrientation(), browser: self)
-        case .download:
-            toolbar = SKDownloadToolBar(frame: frameForToolbarAtOrientation(), browser: self)
-        }
-        
+        toolbar = SKToolbar(frame: .zero, browser: self)
+        toolbar.isHidden = toolbarType == .none
         view.addSubview(toolbar)
     }
 
@@ -668,6 +683,12 @@ private extension SKPhotoBrowser {
             hideControlsAfterDelay()
         }
         setNeedsStatusBarAppearanceUpdate()
+    }
+
+    func applyActionButtonConfigurations() {
+        actionButtonConfigurations.forEach { type, configuration in
+            actionView.updateActionButton(type: type, image: configuration.image, size: configuration.size)
+        }
     }
 }
 

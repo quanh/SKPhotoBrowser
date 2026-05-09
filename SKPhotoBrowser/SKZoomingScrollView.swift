@@ -145,6 +145,7 @@ open class SKZoomingScrollView: UIScrollView {
         } else {
             frameToCenter.origin.y = 0
         }
+        frameToCenter.origin.y += hiddenToolbarVerticalOffset()
         
         // Center
         if !imageView.frame.equalTo(frameToCenter) {
@@ -539,5 +540,19 @@ private extension SKZoomingScrollView {
         let y = touchPoint.y - (w / max(SKMesurement.screenScale, 2.0))
         
         return CGRect(x: x, y: y, width: w, height: h)
+    }
+
+    func hiddenToolbarVerticalOffset() -> CGFloat {
+        guard browser?.toolbarType == SKPhotoBrowserToolBarType.none else {
+            return 0
+        }
+
+        if let toolbar = browser?.toolbar, toolbar.frame.height > 0 {
+            return toolbar.frame.height / 2
+        }
+        if let toolbarHeight = browser?.frameForToolbarAtOrientation().height, toolbarHeight > 0 {
+            return toolbarHeight / 2
+        }
+        return 22
     }
 }

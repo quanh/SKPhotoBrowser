@@ -62,14 +62,26 @@ class SKToolbar: UIToolbar {
     }
     
     func setupToolbar() {
-        toolActionButton = UIBarButtonItem(barButtonSystemItem: .action, target: browser, action: #selector(SKPhotoBrowser.actionButtonPressed))
+        var actionImage: UIImage?
+        switch browser?.toolbarType {
+        case .delete:
+            actionImage = UIImage(named: "btn_common_delete_wh")
+        case .download:
+            actionImage = UIImage(named: "btn_common_download_wh")
+        default:
+            setItems([], animated: false)
+            return
+        }
+        if let actionImage{
+            toolActionButton = UIBarButtonItem(image: actionImage, style: .plain, target: self, action: #selector(SKPhotoBrowser.actionButtonPressed))
+        }else{
+            toolActionButton = UIBarButtonItem(barButtonSystemItem: .action, target: browser, action: #selector(SKPhotoBrowser.actionButtonPressed))
+        }
         toolActionButton.tintColor = UIColor.white
         
         var items = [UIBarButtonItem]()
         items.append(UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: self, action: nil))
-        if SKPhotoBrowserOptions.displayAction {
-            items.append(toolActionButton)
-        }
+        items.append(toolActionButton)
         setItems(items, animated: false)
     }
     
