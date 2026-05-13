@@ -494,13 +494,13 @@ private extension SKZoomingScrollView {
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
                 queue: .main) { [weak self] _ in
-                    self?.player?.seek(to: CMTime.zero)
-                    self?.isMediaPlaying = false
-                    self?.updatePlayButton()
-                    self?.updateVideoControls()
+                    self?.resetVideoPlaybackToBeginning()
                 }
             updatePlayButton(hidden: false)
             updateVideoControls()
+            if isCurrentDisplayedPage() {
+                play()
+            }
             return true
         case .livePhoto:
             guard (photo?.progress ?? 0) >= 1 else {
@@ -587,6 +587,27 @@ private extension SKZoomingScrollView {
             player?.removeTimeObserver(playerTimeObserver)
             self.playerTimeObserver = nil
         }
+    }
+
+    func resetVideoPlaybackToBeginning() {
+        guard let player = player else {
+            return
+        }
+        isMediaPlaying = false
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            guard let self = self else { return }
+            self.player?.pause()
+            self.isMediaPlaying = false
+            self.updatePlayButton()
+            self.updateVideoControls()
+        }
+    }
+
+    func isCurrentDisplayedPage() -> Bool {
+        guard let browser = browser else {
+            return false
+        }
+        return self === browser.pageDisplayedAtIndex(browser.currentPageIndex)
     }
 
     func getViewFramePercent(_ view: UIView, touch: UITouch) -> CGPoint {

@@ -14,12 +14,12 @@ import UIKit
 }
 
 class SKAnimator: NSObject, SKPhotoBrowserAnimatorDelegate {
-    fileprivate let window = UIApplication.shared.preferredApplicationWindow
+    fileprivate let window = UIApplication.shared.sk_Window
     fileprivate var resizableImageView: UIImageView?
     fileprivate var finalImageViewFrame: CGRect = .zero
     
     internal lazy var backgroundView: UIView = {
-        guard let window = UIApplication.shared.preferredApplicationWindow else { fatalError() }
+        guard let window = UIApplication.shared.sk_Window else { fatalError() }
         
         let backgroundView = UIView(frame: window.frame)
         backgroundView.backgroundColor = SKPhotoBrowserOptions.backgroundColor

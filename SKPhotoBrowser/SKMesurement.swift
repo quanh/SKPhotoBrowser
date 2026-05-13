@@ -13,13 +13,13 @@ struct SKMesurement {
     static let isPhone: Bool = UIDevice.current.userInterfaceIdiom == .phone
     static let isPad: Bool = UIDevice.current.userInterfaceIdiom == .pad
     static var statusBarH: CGFloat {
-        return UIApplication.shared.statusBarFrame.height
+        return UIApplication.shared.sk_statusBarHeight
     }
     static var screenHeight: CGFloat {
-        return UIApplication.shared.preferredApplicationWindow?.bounds.height ?? UIScreen.main.bounds.height
+        return UIApplication.shared.sk_Window?.bounds.height ?? UIScreen.main.bounds.height
     }
     static var screenWidth: CGFloat {
-        return UIApplication.shared.preferredApplicationWindow?.bounds.width ?? UIScreen.main.bounds.width
+        return UIApplication.shared.sk_Window?.bounds.width ?? UIScreen.main.bounds.width
     }
     static var screenScale: CGFloat {
         return UIScreen.main.scale
@@ -28,10 +28,6 @@ struct SKMesurement {
         return screenWidth / screenHeight
     }
     static var isPhoneX: Bool {
-        let iPhoneXHeights: [CGFloat] = [2436, 2688, 1792]
-        if isPhone, iPhoneXHeights.contains(UIScreen.main.nativeBounds.height) {
-           return true
-        }
-        return false
+        return UIApplication.shared.sk_safeAreaInset.top > 20
     }
 }

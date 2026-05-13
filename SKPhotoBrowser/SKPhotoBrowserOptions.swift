@@ -9,7 +9,7 @@
 import UIKit
 
 public struct SKPhotoBrowserOptions {
-    public static var displayStatusbar: Bool = false
+    public static var displayStatusbar: Bool = true
     public static var displayCloseButton: Bool = true
     public static var displayDeleteButton: Bool = false
 
@@ -56,9 +56,8 @@ public struct SKPhotoBrowserOptions {
 }
 
 public struct SKButtonOptions {
-    public static var closeButtonPadding: CGPoint = CGPoint(x: 5, y: 20)
-    public static var deleteButtonPadding: CGPoint = CGPoint(x: 5, y: 20)
-    public static var downloadButtonPadding: CGPoint = CGPoint(x: 5, y: 20)
+    public static var leftPadding: CGFloat = 8
+    public static var buttonPadding: CGFloat = 0
     public static var buttonImageSize: CGSize = CGSize(width: 24, height: 24)
 }
 

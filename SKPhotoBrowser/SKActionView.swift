@@ -145,12 +145,15 @@ class SKActionView: UIView {
     internal var deleteButton: SKDeleteButton!
     internal var downloadButton: SKDownloadButton!
     internal var playButton: UIButton!
-    internal var livePhotoBadgeView: UIImageView!
     internal var videoControlView: SKVideoControlView!
+    private var topButtonStackView: UIStackView!
+    private let topButtonSpacerView = UIView()
     fileprivate var actionType: SKPhotoBrowserActionType = .none
     
     // Action
     fileprivate var cancelTitle = "Cancel"
+    
+    private let topOffset = SKMesurement.statusBarH
     
     required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
@@ -164,6 +167,7 @@ class SKActionView: UIView {
         self.init(frame: frame)
         self.browser = browser
 
+        configureTopButtonStackView()
         configureCloseButton()
         configureDeleteButton()
         configureDownloadButton()
@@ -173,9 +177,9 @@ class SKActionView: UIView {
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         if let view = super.hitTest(point, with: event) {
-            if (!closeButton.isHidden && closeButton.alpha > 0.01 && closeButton.frame.contains(point))
-                || (!deleteButton.isHidden && deleteButton.alpha > 0.01 && deleteButton.frame.contains(point))
-                || (!downloadButton.isHidden && downloadButton.alpha > 0.01 && downloadButton.frame.contains(point))
+            if actionButtonContains(point, button: closeButton)
+                || actionButtonContains(point, button: deleteButton)
+                || actionButtonContains(point, button: downloadButton)
                 || (!playButton.isHidden && playButton.alpha > 0.01 && playButton.frame.contains(point))
                 || (!videoControlView.isHidden && videoControlView.alpha > 0.01 && videoControlView.frame.contains(point)) {
                 return view
@@ -187,6 +191,7 @@ class SKActionView: UIView {
 
     func updateFrame(frame: CGRect) {
         self.frame = frame
+        layoutActionButtons()
         layoutMediaControls()
         setNeedsDisplay()
     }
@@ -199,14 +204,12 @@ class SKActionView: UIView {
     func updateMediaControls(for page: SKZoomingScrollView?) {
         guard let page = page else {
             playButton.isHidden = true
-            livePhotoBadgeView.isHidden = true
             videoControlView.isHidden = true
             videoControlView.reset()
             return
         }
 
         playButton.isHidden = !page.shouldShowMediaPlayButton
-        livePhotoBadgeView.isHidden = !page.shouldShowLivePhotoBadge
         videoControlView.isHidden = !page.shouldShowVideoControls
         if page.shouldShowVideoControls {
             videoControlView.update(
@@ -246,25 +249,12 @@ class SKActionView: UIView {
 
     
     func animate(hidden: Bool) {
-        let closeFrame: CGRect = hidden ? closeButton.hideFrame : closeButton.showFrame
-        let deleteFrame: CGRect = hidden ? deleteButton.hideFrame : deleteButton.showFrame
-        let downloadFrame: CGRect = hidden ? downloadButton.hideFrame : downloadButton.showFrame
+        layoutActionButtons()
         UIView.animate(withDuration: 0.35,
                        animations: { () -> Void in
                         let alpha: CGFloat = hidden ? 0.0 : 1.0
 
-                        if SKPhotoBrowserOptions.displayCloseButton {
-                            self.closeButton.alpha = alpha
-                            self.closeButton.frame = closeFrame
-                        }
-                        if !self.deleteButton.isHidden {
-                            self.deleteButton.alpha = alpha
-                            self.deleteButton.frame = deleteFrame
-                        }
-                        if !self.downloadButton.isHidden {
-                            self.downloadButton.alpha = alpha
-                            self.downloadButton.frame = downloadFrame
-                        }
+                        self.topButtonStackView.alpha = alpha
         }, completion: nil)
     }
     
@@ -290,12 +280,28 @@ class SKActionView: UIView {
 }
 
 extension SKActionView {
+    func configureTopButtonStackView() {
+        if topButtonStackView != nil {
+            return
+        }
+
+        topButtonSpacerView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        topButtonSpacerView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        topButtonStackView = UIStackView(arrangedSubviews: [topButtonSpacerView])
+        topButtonStackView.axis = .horizontal
+        topButtonStackView.alignment = .center
+        topButtonStackView.distribution = .fill
+        topButtonStackView.spacing = SKButtonOptions.buttonPadding
+        addSubview(topButtonStackView)
+    }
+
     func configureCloseButton(image: UIImage? = nil, size: CGSize? = nil) {
         if closeButton == nil {
             closeButton = SKCloseButton(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
             closeButton.addTarget(self, action: #selector(closeButtonPressed(_:)), for: .touchUpInside)
             closeButton.isHidden = !SKPhotoBrowserOptions.displayCloseButton
-            addSubview(closeButton)
+            insertArrangedActionButton(closeButton, at: 0)
         }
 
         if let size = size {
@@ -312,7 +318,7 @@ extension SKActionView {
             deleteButton = SKDeleteButton(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
             deleteButton.addTarget(self, action: #selector(deleteButtonPressed(_:)), for: .touchUpInside)
             deleteButton.isHidden = true
-            addSubview(deleteButton)
+            topButtonStackView.addArrangedSubview(deleteButton)
         }
         
         if let size = size {
@@ -329,7 +335,7 @@ extension SKActionView {
             downloadButton = SKDownloadButton(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
             downloadButton.addTarget(self, action: #selector(downloadButtonPressed(_:)), for: .touchUpInside)
             downloadButton.isHidden = true
-            addSubview(downloadButton)
+            topButtonStackView.addArrangedSubview(downloadButton)
         }
 
         if let size = size {
@@ -357,17 +363,6 @@ extension SKActionView {
             addSubview(playButton)
         }
 
-        if livePhotoBadgeView == nil {
-            livePhotoBadgeView = UIImageView()
-            livePhotoBadgeView.tintColor = .white
-            livePhotoBadgeView.contentMode = .center
-            if #available(iOS 13.0, *) {
-                livePhotoBadgeView.image = UIImage(systemName: "livephoto", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24))
-            }
-            livePhotoBadgeView.isHidden = true
-            addSubview(livePhotoBadgeView)
-        }
-
         if videoControlView == nil {
             videoControlView = SKVideoControlView(frame: .zero)
             videoControlView.isHidden = true
@@ -377,26 +372,46 @@ extension SKActionView {
         layoutMediaControls()
     }
 
+    func layoutActionButtons() {
+        topButtonStackView?.spacing = SKButtonOptions.buttonPadding
+        topButtonStackView?.frame = CGRect(
+            x: SKButtonOptions.leftPadding,
+            y: topOffset,
+            width: max(0, bounds.width - SKButtonOptions.leftPadding * 2),
+            height: 44)
+    }
+
     func layoutMediaControls() {
         playButton?.frame = CGRect(
             x: bounds.midX - 28,
             y: bounds.midY - 28,
-            width: 56,
-            height: 56)
-        livePhotoBadgeView?.frame = CGRect(
-            x: bounds.width - 16 - 24,
-            y: safeAreaInsets.top + 48,
-            width: 24,
-            height: 24)
+            width: 64,
+            height: 64)
 
         let controlWidth = min(bounds.width - 32, 343)
         let toolbarHeight = browser?.toolbarType == SKPhotoBrowserToolBarType.none ? 0 : (browser?.toolbar.frame.height ?? 0)
-        let bottomInset = safeAreaInsets.bottom + toolbarHeight + 16
+        let bottomInset = UIApplication.shared.sk_safeAreaInset.bottom
         videoControlView?.frame = CGRect(
             x: floor((bounds.width - controlWidth) / 2),
             y: bounds.height - bottomInset - 40,
             width: controlWidth,
             height: 40)
+    }
+
+
+    func insertArrangedActionButton(_ button: SKButton, at index: Int) {
+        topButtonStackView.insertArrangedSubview(button, at: index)
+    }
+
+    func actionButtonContains(_ point: CGPoint, button: SKButton?) -> Bool {
+        guard let button = button,
+              !button.isHidden,
+              button.alpha > 0.01,
+              topButtonStackView.alpha > 0.01 else {
+            return false
+        }
+        let buttonPoint = convert(point, to: button)
+        return button.bounds.contains(buttonPoint)
     }
 
     func updateToolButtonsVisibility() {
