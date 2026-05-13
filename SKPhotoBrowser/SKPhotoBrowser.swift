@@ -677,8 +677,9 @@ private extension SKPhotoBrowser {
         paginationView.setControlsHidden(hidden: hidden)
         
         // action view animation
-        actionView.animate(hidden: hidden)
-        
+        if SKPhotoBrowserOptions.hideActionViewWhenTapped{
+            actionView.animate(hidden: hidden)
+        }
         if !hidden && !permanent {
             hideControlsAfterDelay()
         }

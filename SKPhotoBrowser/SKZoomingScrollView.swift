@@ -57,10 +57,19 @@ open class SKZoomingScrollView: UIScrollView {
     fileprivate var playerLayer: AVPlayerLayer?
     fileprivate var livePhotoView: UIView?
     fileprivate var playerEndObserver: NSObjectProtocol?
+    fileprivate var playerTimeObserver: Any?
     fileprivate var isMediaPlaying = false
 
     var shouldShowMediaPlayButton: Bool {
         return (player != nil || livePhotoView != nil) && (photo?.progress ?? 0) >= 1
+    }
+
+    var shouldShowVideoControls: Bool {
+        return player != nil && (photo?.progress ?? 0) >= 1
+    }
+
+    var shouldToggleVideoPlaybackOnTap: Bool {
+        return player != nil && (photo?.progress ?? 0) >= 1
     }
 
     var shouldShowLivePhotoBadge: Bool {
@@ -69,6 +78,21 @@ open class SKZoomingScrollView: UIScrollView {
 
     var mediaIsPlaying: Bool {
         return isMediaPlaying
+    }
+
+    var videoPlaybackProgress: CGFloat {
+        guard let player = player else {
+            return 0
+        }
+        let duration = player.currentItem?.duration.seconds ?? 0
+        guard duration.isFinite, duration > 0 else {
+            return 0
+        }
+        let current = player.currentTime().seconds
+        guard current.isFinite else {
+            return 0
+        }
+        return CGFloat(min(max(current / duration, 0), 1))
     }
     
     required public init?(coder aDecoder: NSCoder) {
@@ -287,6 +311,7 @@ open class SKZoomingScrollView: UIScrollView {
         player?.play()
         isMediaPlaying = true
         updatePlayButton()
+        updateVideoControls()
     }
 
     open func pause() {
@@ -296,6 +321,7 @@ open class SKZoomingScrollView: UIScrollView {
         player?.pause()
         isMediaPlaying = false
         updatePlayButton()
+        updateVideoControls()
     }
 
     func toggleMediaPlayback() {
@@ -309,6 +335,22 @@ open class SKZoomingScrollView: UIScrollView {
             play()
         }
         browser?.hideControlsAfterDelay()
+    }
+
+    func seekVideo(to progress: CGFloat) {
+        guard let player = player else {
+            return
+        }
+        let duration = player.currentItem?.duration.seconds ?? 0
+        guard duration.isFinite, duration > 0 else {
+            return
+        }
+        let clampedProgress = min(max(progress, 0), 1)
+        let time = CMTime(seconds: duration * Double(clampedProgress), preferredTimescale: 600)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            guard let self = self else { return }
+            self.updateVideoControls()
+        }
     }
     
     // MARK: - handle tap
@@ -361,6 +403,10 @@ extension SKZoomingScrollView: SKDetectingViewDelegate {
         guard let browser = browser else {
             return
         }
+        if shouldToggleVideoPlaybackOnTap {
+            togglePlayback()
+            return
+        }
         guard SKPhotoBrowserOptions.enableZoomBlackArea == true else {
             return
         }
@@ -385,6 +431,10 @@ extension SKZoomingScrollView: SKDetectingViewDelegate {
 extension SKZoomingScrollView: SKDetectingImageViewDelegate {
     func handleImageViewSingleTap(_ touchPoint: CGPoint) {
         guard let browser = browser else {
+            return
+        }
+        if shouldToggleVideoPlaybackOnTap {
+            togglePlayback()
             return
         }
         if SKPhotoBrowserOptions.enableSingleTapDismiss {
@@ -428,6 +478,7 @@ private extension SKZoomingScrollView {
             imageView.contentMode = .scaleAspectFit
 
             let player = AVPlayer(url: videoURL)
+            player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
             let layer = AVPlayerLayer(player: player)
             layer.videoGravity = .resizeAspect
             layer.frame = imageView.bounds
@@ -435,6 +486,9 @@ private extension SKZoomingScrollView {
 
             self.player = player
             self.playerLayer = layer
+            isMediaPlaying = false
+            updateVideoControls()
+            addPlayerTimeObserver(to: player)
             updateLivePhotoBadge(hidden: true)
             playerEndObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
@@ -443,9 +497,10 @@ private extension SKZoomingScrollView {
                     self?.player?.seek(to: CMTime.zero)
                     self?.isMediaPlaying = false
                     self?.updatePlayButton()
+                    self?.updateVideoControls()
                 }
-            isMediaPlaying = false
             updatePlayButton(hidden: false)
+            updateVideoControls()
             return true
         case .livePhoto:
             guard (photo?.progress ?? 0) >= 1 else {
@@ -491,6 +546,7 @@ private extension SKZoomingScrollView {
             NotificationCenter.default.removeObserver(playerEndObserver)
             self.playerEndObserver = nil
         }
+        removePlayerTimeObserver()
         playerLayer?.removeFromSuperlayer()
         playerLayer = nil
         player?.pause()
@@ -503,6 +559,7 @@ private extension SKZoomingScrollView {
         livePhotoView = nil
         updatePlayButton(hidden: true)
         updateLivePhotoBadge(hidden: true)
+        updateVideoControls()
     }
 
     func updatePlayButton(hidden: Bool? = nil) {
@@ -511,6 +568,25 @@ private extension SKZoomingScrollView {
 
     func updateLivePhotoBadge(hidden: Bool) {
         browser?.refreshMediaControls(for: self)
+    }
+
+    func updateVideoControls() {
+        browser?.refreshMediaControls(for: self)
+    }
+
+    func addPlayerTimeObserver(to player: AVPlayer) {
+        removePlayerTimeObserver()
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        playerTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
+            self?.updateVideoControls()
+        }
+    }
+
+    func removePlayerTimeObserver() {
+        if let playerTimeObserver = playerTimeObserver {
+            player?.removeTimeObserver(playerTimeObserver)
+            self.playerTimeObserver = nil
+        }
     }
 
     func getViewFramePercent(_ view: UIView, touch: UITouch) -> CGPoint {
@@ -546,13 +622,6 @@ private extension SKZoomingScrollView {
         guard browser?.toolbarType == SKPhotoBrowserToolBarType.none else {
             return 0
         }
-
-        if let toolbar = browser?.toolbar, toolbar.frame.height > 0 {
-            return toolbar.frame.height / 2
-        }
-        if let toolbarHeight = browser?.frameForToolbarAtOrientation().height, toolbarHeight > 0 {
-            return toolbarHeight / 2
-        }
-        return 22
+        return 12
     }
 }

@@ -39,6 +39,8 @@ public struct SKPhotoBrowserOptions {
     /// Default: false
     public static var swapActionButtons: Bool = false
     public static var disableVerticalSwipe: Bool = false
+    
+    public static var hideActionViewWhenTapped: Bool = false
 
     /// if this value is true, the long photo width will match the screen,
     /// and the minScale is 1.0, the maxScale is 2.5
